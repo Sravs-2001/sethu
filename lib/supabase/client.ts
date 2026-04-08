@@ -1,22 +1,12 @@
 import { createBrowserClient } from '@supabase/ssr'
 
-let supabaseClient: ReturnType<typeof createBrowserClient> | null = null
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-export const supabase = new Proxy({} as ReturnType<typeof createBrowserClient>, {
-  get(target, prop) {
-    if (!supabaseClient) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables')
+}
 
-      if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables')
-      }
-
-      supabaseClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
-        realtime: { params: { eventsPerSecond: 10 } },
-      })
-    }
-
-    return Reflect.get(supabaseClient, prop)
-  },
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+  realtime: { params: { eventsPerSecond: 10 } },
 })
