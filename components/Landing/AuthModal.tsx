@@ -76,7 +76,7 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
+        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/api/auth/callback` : '',
       },
     })
     if (error) {
@@ -92,7 +92,7 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
     setError(''); setLoading('magic')
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
+      options: { emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/api/auth/callback` : '' },
     })
     if (error) setError(error.message)
     else setSuccess(`Magic link sent to ${email} — check your inbox!`)
