@@ -1,39 +1,39 @@
 'use client'
 
-import clsx from 'clsx'
 import type { Priority, Status } from '@/types'
 
+const PRIORITY_STYLE: Record<Priority, { dotColor: string; bg: string; color: string; label: string }> = {
+  critical: { dotColor: '#DE350B', bg: '#FFEBE6', color: '#BF2600', label: 'Critical' },
+  high:     { dotColor: '#FF8B00', bg: '#FFFAE6', color: '#974F0C', label: 'High'     },
+  medium:   { dotColor: '#F79233', bg: '#FFF7D6', color: '#7A4800', label: 'Medium'   },
+  low:      { dotColor: '#36B37E', bg: '#E3FCEF', color: '#006644', label: 'Low'      },
+}
+
+const STATUS_STYLE: Record<Status, { dotColor: string; bg: string; color: string; label: string }> = {
+  todo:        { dotColor: '#97A0AF', bg: '#DFE1E6', color: '#42526E', label: 'To Do'       },
+  in_progress: { dotColor: '#0052CC', bg: '#DEEBFF', color: '#0747A6', label: 'In Progress' },
+  review:      { dotColor: '#6554C0', bg: '#EAE6FF', color: '#403294', label: 'In Review'   },
+  done:        { dotColor: '#36B37E', bg: '#E3FCEF', color: '#006644', label: 'Done'        },
+}
+
 export function PriorityBadge({ priority }: { priority: Priority }) {
+  const s = PRIORITY_STYLE[priority]
   return (
-    <span className={clsx(
-      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-      priority === 'critical' && 'bg-red-100 text-red-700',
-      priority === 'high' && 'bg-orange-100 text-orange-700',
-      priority === 'medium' && 'bg-yellow-100 text-yellow-700',
-      priority === 'low' && 'bg-gray-100 text-gray-600',
-    )}>
-      <span className={clsx(
-        'w-1.5 h-1.5 rounded-full',
-        priority === 'critical' && 'bg-red-500',
-        priority === 'high' && 'bg-orange-500',
-        priority === 'medium' && 'bg-yellow-500',
-        priority === 'low' && 'bg-gray-400',
-      )} />
-      {priority}
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold rounded-full"
+      style={{ background: s.bg, color: s.color }}>
+      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: s.dotColor }} />
+      {s.label}
     </span>
   )
 }
 
 export function StatusBadge({ status }: { status: Status }) {
+  const s = STATUS_STYLE[status]
   return (
-    <span className={clsx(
-      'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-      status === 'todo' && 'bg-gray-100 text-gray-600',
-      status === 'in_progress' && 'bg-blue-100 text-blue-700',
-      status === 'review' && 'bg-purple-100 text-purple-700',
-      status === 'done' && 'bg-green-100 text-green-700',
-    )}>
-      {status === 'in_progress' ? 'In Progress' : status === 'todo' ? 'To Do' : status.charAt(0).toUpperCase() + status.slice(1)}
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold rounded-full"
+      style={{ background: s.bg, color: s.color }}>
+      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: s.dotColor }} />
+      {s.label}
     </span>
   )
 }

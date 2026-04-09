@@ -19,11 +19,11 @@ interface Props { fullWidth?: boolean }
 
 export default function ChatPanel({ fullWidth = false }: Props) {
   const { channels, activeChannel, setActiveChannel, messages, setMessages, addMessage, user } = useStore()
-  const [input, setInput] = useState('')
+  const [input, setInput]     = useState('')
   const [sending, setSending] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copiedId, setCopiedId]     = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const channelMessages = activeChannel ? (messages[activeChannel.id] ?? []) : []
 
@@ -68,25 +68,43 @@ export default function ChatPanel({ fullWidth = false }: Props) {
 
   if (!fullWidth && collapsed) {
     return (
-      <div className="w-10 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col items-center py-4">
+      <div className="w-10 flex-shrink-0 bg-white flex flex-col items-center py-4"
+        style={{ borderLeft: '1px solid #DFE1E6' }}>
         <button onClick={() => setCollapsed(false)}
-          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Open chat">
+          className="p-2 rounded transition-colors"
+          style={{ color: '#5E6C84' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#0052CC'; (e.currentTarget as HTMLElement).style.background = '#DEEBFF' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#5E6C84'; (e.currentTarget as HTMLElement).style.background = '' }}
+          title="Open chat">
           <MessageSquare className="w-5 h-5" />
         </button>
       </div>
     )
   }
 
+  // ── Channel list (dark for full-width, light for sidebar) ──
   const ChannelList = (
-    <div className={clsx(
-      'flex flex-col flex-shrink-0',
-      fullWidth ? 'w-60 border-r border-white/8 py-5' : 'px-3 py-2 border-b border-gray-100'
-    )} style={fullWidth ? { background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 100%)' } : {}}>
-      <div className={clsx('flex items-center justify-between mb-2', fullWidth ? 'px-4' : 'px-2')}>
-        <p className={clsx('text-[10px] font-black uppercase tracking-widest', fullWidth ? 'text-white/30' : 'text-gray-400')}>Channels</p>
+    <div className={clsx('flex flex-col flex-shrink-0', fullWidth ? 'w-56' : '')}
+      style={fullWidth
+        ? { background: '#0F2040', borderRight: '1px solid rgba(255,255,255,0.08)', paddingTop: '20px', paddingBottom: '20px' }
+        : { borderBottom: '1px solid #DFE1E6', padding: '8px 12px' }
+      }>
+      <div className={clsx('flex items-center justify-between mb-2', fullWidth ? 'px-4' : 'px-1')}>
+        <p className="text-[10px] font-bold uppercase tracking-widest"
+          style={{ color: fullWidth ? 'rgba(255,255,255,0.3)' : '#7A869A' }}>Channels</p>
         <button onClick={() => setShowCreate(true)} title="New channel"
-          className={clsx('w-6 h-6 rounded-lg flex items-center justify-center transition-all',
-            fullWidth ? 'bg-white/8 hover:bg-white/15 text-white/40 hover:text-white' : 'bg-gray-100 hover:bg-blue-50 text-gray-400 hover:text-blue-600')}>
+          className="w-6 h-6 rounded flex items-center justify-center transition-colors"
+          style={fullWidth
+            ? { background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' }
+            : { background: '#F4F5F7', color: '#5E6C84' }}
+          onMouseEnter={e => {
+            if (fullWidth) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.15)'; (e.currentTarget as HTMLElement).style.color = 'white' }
+            else { (e.currentTarget as HTMLElement).style.background = '#DEEBFF'; (e.currentTarget as HTMLElement).style.color = '#0052CC' }
+          }}
+          onMouseLeave={e => {
+            if (fullWidth) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)' }
+            else { (e.currentTarget as HTMLElement).style.background = '#F4F5F7'; (e.currentTarget as HTMLElement).style.color = '#5E6C84' }
+          }}>
           <Plus className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -96,27 +114,36 @@ export default function ChatPanel({ fullWidth = false }: Props) {
           return (
             <div key={ch.id} className="group relative flex items-center">
               <button onClick={() => setActiveChannel(ch)}
-                className={clsx(
-                  'flex-1 flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all text-left font-medium pr-8',
-                  active
-                    ? fullWidth ? 'bg-white/15 text-white' : 'bg-blue-50 text-blue-700'
-                    : fullWidth ? 'text-white/40 hover:text-white/70 hover:bg-white/8' : 'text-gray-600 hover:bg-gray-50'
-                )}>
+                className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors text-left font-medium pr-8"
+                style={fullWidth
+                  ? active ? { background: 'rgba(255,255,255,0.12)', color: 'white' } : { color: 'rgba(255,255,255,0.45)' }
+                  : active ? { background: '#DEEBFF', color: '#0052CC' } : { color: '#172B4D' }
+                }
+                onMouseEnter={e => {
+                  if (active) return
+                  if (fullWidth) { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)' }
+                  else (e.currentTarget as HTMLElement).style.background = '#F4F5F7'
+                }}
+                onMouseLeave={e => {
+                  if (active) return
+                  if (fullWidth) { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'; (e.currentTarget as HTMLElement).style.background = '' }
+                  else (e.currentTarget as HTMLElement).style.background = ''
+                }}>
                 <Hash className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="truncate">{ch.name}</span>
               </button>
               <button onClick={() => copyInvite(ch)} title="Copy invite link"
-                className={clsx('absolute right-1.5 w-5 h-5 rounded-md flex items-center justify-center transition-all opacity-0 group-hover:opacity-100',
-                  fullWidth ? 'bg-white/10 hover:bg-white/20 text-white/60' : 'bg-gray-200 hover:bg-blue-100 text-gray-500 hover:text-blue-600')}>
-                {copiedId === ch.id ? <Check className="w-3 h-3 text-green-400" /> : <Link2 className="w-3 h-3" />}
+                className="absolute right-1.5 w-5 h-5 rounded flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                style={fullWidth ? { background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' } : { background: '#DFE1E6', color: '#5E6C84' }}>
+                {copiedId === ch.id ? <Check className="w-3 h-3" style={{ color: '#36B37E' }} /> : <Link2 className="w-3 h-3" />}
               </button>
             </div>
           )
         })}
         {channels.length === 0 && (
           <button onClick={() => setShowCreate(true)}
-            className={clsx('w-full px-3 py-2 rounded-xl text-xs text-left transition-all',
-              fullWidth ? 'text-white/30 hover:text-white/50' : 'text-gray-400 hover:text-blue-600')}>
+            className="w-full px-3 py-2 rounded text-xs text-left transition-colors"
+            style={{ color: fullWidth ? 'rgba(255,255,255,0.3)' : '#7A869A' }}>
             + Create your first channel
           </button>
         )}
@@ -125,13 +152,13 @@ export default function ChatPanel({ fullWidth = false }: Props) {
   )
 
   const Messages = (
-    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2" style={{ background: '#FFFFFF' }}>
       {channelMessages.length === 0 && (
         <div className="text-center py-12">
-          <Hash className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-          <p className="text-sm text-gray-400">
+          <Hash className="w-10 h-10 mx-auto mb-3" style={{ color: '#DFE1E6' }} />
+          <p className="text-sm" style={{ color: '#7A869A' }}>
             Start the conversation in{' '}
-            <strong className="text-gray-600">#{activeChannel?.name ?? 'a channel'}</strong>
+            <strong style={{ color: '#42526E' }}>#{activeChannel?.name ?? 'a channel'}</strong>
           </p>
         </div>
       )}
@@ -150,19 +177,21 @@ export default function ChatPanel({ fullWidth = false }: Props) {
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">
+                  <div className="w-6 h-6 rounded-full text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0"
+                    style={{ background: '#0052CC' }}>
                     {msg.user?.name?.[0]?.toUpperCase() ?? '?'}
                   </div>
                 )}
-                <span className="text-xs font-semibold text-gray-700">{isMe ? 'You' : (msg.user?.name ?? 'Unknown')}</span>
-                <span className="text-[10px] text-gray-400">{formatTime(new Date(msg.created_at))}</span>
+                <span className="text-xs font-semibold" style={{ color: '#172B4D' }}>{isMe ? 'You' : (msg.user?.name ?? 'Unknown')}</span>
+                <span className="text-[10px]" style={{ color: '#97A0AF' }}>{formatTime(new Date(msg.created_at))}</span>
               </div>
             )}
             <div className={clsx('flex', isMe ? 'justify-end' : 'justify-start')}>
-              <div className={clsx(
-                'max-w-[75%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed break-words',
-                isMe ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'
-              )}>
+              <div className="max-w-[75%] px-3.5 py-2 rounded text-sm leading-relaxed break-words"
+                style={isMe
+                  ? { background: '#0052CC', color: 'white', borderRadius: '8px 8px 2px 8px' }
+                  : { background: '#F4F5F7', color: '#172B4D', borderRadius: '8px 8px 8px 2px' }
+                }>
                 {msg.content}
               </div>
             </div>
@@ -174,18 +203,21 @@ export default function ChatPanel({ fullWidth = false }: Props) {
   )
 
   const Input = (
-    <div className="px-4 py-3 border-t border-gray-100 bg-white">
+    <div className="px-4 py-3 bg-white" style={{ borderTop: '1px solid #DFE1E6' }}>
       <form onSubmit={sendMessage} className="flex items-center gap-2">
         <input
-          className="flex-1 px-4 py-2.5 bg-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400"
+          className="flex-1 px-3 py-2 rounded text-sm outline-none transition-colors"
+          style={{ background: '#F4F5F7', border: '1px solid transparent', color: '#172B4D' }}
           placeholder={activeChannel ? `Message #${activeChannel.name}` : 'Select a channel…'}
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onFocus={e => { (e.target as HTMLElement).style.border = '1px solid #0052CC'; (e.target as HTMLElement).style.boxShadow = '0 0 0 2px rgba(76,154,255,0.2)' }}
+          onBlur={e => { (e.target as HTMLElement).style.border = '1px solid transparent'; (e.target as HTMLElement).style.boxShadow = '' }}
           disabled={!activeChannel}
         />
         <button type="submit" disabled={!input.trim() || sending || !activeChannel}
-          className={clsx('w-9 h-9 rounded-xl flex items-center justify-center transition-colors flex-shrink-0',
-            input.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400')}>
+          className="w-9 h-9 rounded flex items-center justify-center transition-colors flex-shrink-0"
+          style={input.trim() ? { background: '#0052CC', color: 'white' } : { background: '#F4F5F7', color: '#B3BAC5' }}>
           <Send className="w-4 h-4" />
         </button>
       </form>
@@ -199,19 +231,22 @@ export default function ChatPanel({ fullWidth = false }: Props) {
         <div className="flex-1 flex min-w-0">
           {ChannelList}
           <div className="flex-1 flex flex-col bg-white min-w-0">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+            <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '1px solid #DFE1E6' }}>
               <div className="flex items-center gap-2">
-                <Hash className="w-4 h-4 text-gray-400" />
-                <span className="font-bold text-gray-900">{activeChannel?.name ?? 'Select a channel'}</span>
+                <Hash className="w-4 h-4" style={{ color: '#5E6C84' }} />
+                <span className="font-semibold text-sm" style={{ color: '#172B4D' }}>{activeChannel?.name ?? 'Select a channel'}</span>
                 {activeChannel?.description && (
-                  <span className="text-sm text-gray-400 ml-1 hidden sm:block">— {activeChannel.description}</span>
+                  <span className="text-sm ml-1 hidden sm:block" style={{ color: '#7A869A' }}>— {activeChannel.description}</span>
                 )}
               </div>
               {activeChannel && (
                 <button onClick={() => copyInvite(activeChannel)}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-blue-600 transition-colors px-2 py-1 rounded-lg hover:bg-blue-50">
+                  className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded transition-colors"
+                  style={{ color: '#5E6C84' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#0052CC'; (e.currentTarget as HTMLElement).style.background = '#DEEBFF' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#5E6C84'; (e.currentTarget as HTMLElement).style.background = '' }}>
                   {copiedId === activeChannel.id
-                    ? <><Check className="w-3.5 h-3.5 text-green-500" />Copied!</>
+                    ? <><Check className="w-3.5 h-3.5" style={{ color: '#36B37E' }} />Copied!</>
                     : <><Link2 className="w-3.5 h-3.5" />Invite</>}
                 </button>
               )}
@@ -221,14 +256,17 @@ export default function ChatPanel({ fullWidth = false }: Props) {
           </div>
         </div>
       ) : (
-        <div className="w-72 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <div className="w-72 flex-shrink-0 bg-white flex flex-col" style={{ borderLeft: '1px solid #DFE1E6' }}>
+          <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid #DFE1E6' }}>
             <div className="flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-blue-500" />
-              <span className="font-semibold text-sm text-gray-900">Team Chat</span>
+              <MessageSquare className="w-4 h-4" style={{ color: '#0052CC' }} />
+              <span className="font-semibold text-sm" style={{ color: '#172B4D' }}>Team Chat</span>
             </div>
             <button onClick={() => setCollapsed(true)}
-              className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded">
+              className="p-1 rounded transition-colors"
+              style={{ color: '#97A0AF' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#172B4D'; (e.currentTarget as HTMLElement).style.background = '#F4F5F7' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#97A0AF'; (e.currentTarget as HTMLElement).style.background = '' }}>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>

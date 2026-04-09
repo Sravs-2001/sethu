@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
-import { Plus, Bug, Trash2, Pencil } from 'lucide-react'
+import { Plus, Bug, Trash2, Pencil, List, LayoutGrid } from 'lucide-react'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import type { Bug as BugType, Priority, Status } from '@/types'
@@ -14,8 +14,15 @@ const STATUSES: Status[] = ['todo', 'in_progress', 'review', 'done']
 const STATUS_LABELS: Record<Status, string> = {
   todo: 'To Do', in_progress: 'In Progress', review: 'Review', done: 'Done'
 }
-const STATUS_COLORS: Record<Status, string> = {
-  todo: 'border-gray-300', in_progress: 'border-blue-400', review: 'border-purple-400', done: 'border-green-400'
+const STATUS_HEADER_COLOR: Record<Status, string> = {
+  todo:        'border-t-[#DFE1E6]',
+  in_progress: 'border-t-[#0052CC]',
+  review:      'border-t-[#6554C0]',
+  done:        'border-t-[#36B37E]',
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="block text-xs font-semibold text-[#5E6C84] mb-1">{children}</label>
 }
 
 function BugForm({ initial, onSave, onClose }: {
@@ -25,12 +32,12 @@ function BugForm({ initial, onSave, onClose }: {
 }) {
   const { profiles, sprints } = useStore()
   const [form, setForm] = useState({
-    title: initial?.title ?? '',
+    title:       initial?.title       ?? '',
     description: initial?.description ?? '',
-    priority: initial?.priority ?? 'medium' as Priority,
-    status: initial?.status ?? 'todo' as Status,
+    priority:    initial?.priority    ?? 'medium' as Priority,
+    status:      initial?.status      ?? 'todo'   as Status,
     assignee_id: initial?.assignee_id ?? '',
-    sprint_id: initial?.sprint_id ?? '',
+    sprint_id:   initial?.sprint_id   ?? '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -43,18 +50,18 @@ function BugForm({ initial, onSave, onClose }: {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form onSubmit={submit} className="space-y-3.5">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+        <FieldLabel>Summary *</FieldLabel>
         <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required placeholder="Brief description of the bug" />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+        <FieldLabel>Description</FieldLabel>
         <textarea className="input h-24 resize-none" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Steps to reproduce, expected vs actual..." />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+          <FieldLabel>Priority</FieldLabel>
           <select className="input" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as Priority })}>
             {(['critical', 'high', 'medium', 'low'] as Priority[]).map((p) => (
               <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
@@ -62,59 +69,61 @@ function BugForm({ initial, onSave, onClose }: {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <FieldLabel>Status</FieldLabel>
           <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Status })}>
             {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
           </select>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Assignee</label>
+          <FieldLabel>Assignee</FieldLabel>
           <select className="input" value={form.assignee_id} onChange={(e) => setForm({ ...form, assignee_id: e.target.value })}>
             <option value="">Unassigned</option>
             {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Sprint</label>
+          <FieldLabel>Sprint</FieldLabel>
           <select className="input" value={form.sprint_id} onChange={(e) => setForm({ ...form, sprint_id: e.target.value })}>
             <option value="">No sprint</option>
             {sprints.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
       </div>
-      <div className="flex gap-3 pt-2">
+      <div className="flex gap-2 pt-2 border-t border-[#DFE1E6]">
         <button type="submit" className="btn-primary" disabled={saving}>
-          {saving ? 'Saving...' : initial?.id ? 'Update Bug' : 'Create Bug'}
+          {saving ? 'Saving...' : initial?.id ? 'Update' : 'Create bug'}
         </button>
-        <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
+        <button type="button" onClick={onClose} className="btn-subtle">Cancel</button>
       </div>
     </form>
   )
 }
 
 export default function BugBoard() {
-  const { bugs, setBugs, addBug, updateBug, deleteBug, user } = useStore()
+  const { bugs, setBugs, addBug, updateBug, deleteBug, user, project } = useStore()
   const [showCreate, setShowCreate] = useState(false)
-  const [editing, setEditing] = useState<BugType | null>(null)
-  const [view, setView] = useState<'board' | 'list'>('board')
+  const [editing, setEditing]       = useState<BugType | null>(null)
+  const [view, setView]             = useState<'board' | 'list'>('board')
   const [filterPriority, setFilterPriority] = useState<Priority | ''>('')
 
   useEffect(() => {
-    supabase.from('bugs').select('*, assignee:profiles(*)').order('created_at', { ascending: false })
+    if (!project) return
+    const pid = project.id
+    supabase.from('bugs').select('*, assignee:profiles(*)').eq('project_id', pid).order('created_at', { ascending: false })
       .then(({ data }) => data && setBugs(data as any))
-    const channel = supabase.channel('bugs-realtime')
+    const channel = supabase.channel(`bugs-realtime-${pid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bugs' }, () => {
-        supabase.from('bugs').select('*, assignee:profiles(*)').order('created_at', { ascending: false })
+        supabase.from('bugs').select('*, assignee:profiles(*)').eq('project_id', pid).order('created_at', { ascending: false })
           .then(({ data }) => data && setBugs(data as any))
       }).subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [])
+  }, [project?.id])
 
   async function handleCreate(data: Partial<BugType>) {
-    if (!user) return
-    const { data: bug } = await supabase.from('bugs').insert({ ...data, created_by: user.id }).select('*, assignee:profiles(*)').single()
+    if (!user || !project) return
+    const { data: bug } = await supabase.from('bugs').insert({ ...data, created_by: user.id, project_id: project.id }).select('*, assignee:profiles(*)').single()
     if (bug) addBug(bug as any)
   }
 
@@ -138,73 +147,108 @@ export default function BugBoard() {
   const filtered = bugs.filter((b) => !filterPriority || b.priority === filterPriority)
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center gap-4">
+    <div className="p-5 space-y-4">
+      {/* Page header */}
+      <div className="flex items-center gap-3 pb-3 border-b border-[#DFE1E6]">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            <Bug className="w-5 h-5 text-red-500" /> Bug Tracker
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">{bugs.length} total · {bugs.filter(b => b.status !== 'done').length} open</p>
+          <div className="flex items-center gap-2">
+            <Bug className="w-4 h-4 text-[#DE350B]" />
+            <h1 className="text-lg font-semibold text-[#172B4D]">Bug Tracker</h1>
+          </div>
+          <p className="text-xs text-[#5E6C84] mt-0.5">{bugs.length} total · {bugs.filter(b => b.status !== 'done').length} open</p>
         </div>
-        <div className="ml-auto flex items-center gap-3">
-          <select className="input w-36 py-1.5" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value as any)}>
+        <div className="ml-auto flex items-center gap-2">
+          <select
+            className="input w-36 py-1"
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value as any)}
+          >
             <option value="">All priorities</option>
             {(['critical', 'high', 'medium', 'low'] as Priority[]).map((p) => (
               <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
             ))}
           </select>
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-            {(['board', 'list'] as const).map((v) => (
-              <button key={v} onClick={() => setView(v)}
-                className={clsx('px-3 py-1.5 text-sm font-medium transition-colors',
-                  view === v ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}>
-                {v.charAt(0).toUpperCase() + v.slice(1)}
-              </button>
-            ))}
+          {/* View toggle */}
+          <div className="flex rounded border border-[#DFE1E6] overflow-hidden bg-white">
+            <button
+              onClick={() => setView('board')}
+              className={clsx('flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors',
+                view === 'board' ? 'bg-[#0052CC] text-white' : 'text-[#42526E] hover:bg-[#F4F5F7]')}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> Board
+            </button>
+            <button
+              onClick={() => setView('list')}
+              className={clsx('flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors border-l border-[#DFE1E6]',
+                view === 'list' ? 'bg-[#0052CC] text-white' : 'text-[#42526E] hover:bg-[#F4F5F7]')}
+            >
+              <List className="w-3.5 h-3.5" /> List
+            </button>
           </div>
           <button onClick={() => setShowCreate(true)} className="btn-primary">
-            <Plus className="w-4 h-4" /> New Bug
+            <Plus className="w-3.5 h-3.5" /> Create
           </button>
         </div>
       </div>
 
+      {/* Board view */}
       {view === 'board' && (
-        <div className="grid grid-cols-4 gap-4 pb-4">
+        <div className="grid grid-cols-4 gap-3">
           {STATUSES.map((status) => {
             const items = filtered.filter((b) => b.status === status)
             return (
-              <div key={status} className={clsx('rounded-xl border-t-4 bg-white shadow-sm overflow-hidden', STATUS_COLORS[status])}>
-                <div className="px-4 py-3 bg-white border-b border-gray-100">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm text-gray-700">{STATUS_LABELS[status]}</span>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">{items.length}</span>
-                  </div>
+              <div
+                key={status}
+                className={clsx('rounded border-t-2 bg-[#F4F5F7] overflow-hidden', STATUS_HEADER_COLOR[status])}
+                style={{ border: '1px solid #DFE1E6', borderTopWidth: '2px' }}
+              >
+                {/* Column header */}
+                <div className="px-3 py-2.5 flex items-center justify-between bg-[#F4F5F7]">
+                  <span className="text-xs font-semibold text-[#42526E] uppercase tracking-wide">{STATUS_LABELS[status]}</span>
+                  <span className="text-xs bg-[#DFE1E6] text-[#42526E] px-1.5 py-0.5 rounded-sm font-semibold">{items.length}</span>
                 </div>
-                <div className="p-3 space-y-2 min-h-[120px]">
+                {/* Cards */}
+                <div className="p-2 space-y-2 min-h-[100px]">
                   {items.map((bug) => (
-                    <div key={bug.id} className="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors group">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <p className="text-sm font-medium text-gray-800 leading-tight flex-1">{bug.title}</p>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                          <button onClick={() => setEditing(bug)} className="p-1 text-gray-400 hover:text-blue-600"><Pencil className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDelete(bug.id)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <div
+                      key={bug.id}
+                      className="bg-white rounded border border-[#DFE1E6] p-2.5 hover:border-[#B3BAC5] transition-colors group cursor-pointer"
+                      style={{ boxShadow: '0 1px 2px rgba(9,30,66,0.06)' }}
+                    >
+                      <div className="flex items-start justify-between gap-1.5 mb-2">
+                        <p className="text-xs font-medium text-[#172B4D] leading-snug flex-1">{bug.title}</p>
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          <button onClick={() => setEditing(bug)} className="p-1 text-[#7A869A] hover:text-[#0052CC] rounded hover:bg-[#DEEBFF]">
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => handleDelete(bug.id)} className="p-1 text-[#7A869A] hover:text-[#DE350B] rounded hover:bg-[#FFEBE6]">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <PriorityBadge priority={bug.priority} />
                         {bug.assignee && (
-                          <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0" title={bug.assignee.name}>
+                          <span
+                            className="w-5 h-5 rounded-full bg-[#0052CC] text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 ml-auto"
+                            title={bug.assignee.name}
+                          >
                             {bug.assignee.name[0].toUpperCase()}
                           </span>
                         )}
                       </div>
-                      <select value={bug.status} onChange={(e) => handleStatusChange(bug, e.target.value as Status)}
-                        className="mt-2 text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white text-gray-600 w-full">
+                      <select
+                        value={bug.status}
+                        onChange={(e) => handleStatusChange(bug, e.target.value as Status)}
+                        className="mt-2 w-full text-xs border border-[#DFE1E6] rounded-sm px-1.5 py-0.5 bg-white text-[#42526E] focus:outline-none focus:border-[#4C9AFF]"
+                      >
                         {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                       </select>
                     </div>
                   ))}
-                  {items.length === 0 && <div className="py-6 text-center text-xs text-gray-300">Drop items here</div>}
+                  {items.length === 0 && (
+                    <div className="py-6 text-center text-xs text-[#B3BAC5]">No issues</div>
+                  )}
                 </div>
               </div>
             )
@@ -212,39 +256,63 @@ export default function BugBoard() {
         </div>
       )}
 
+      {/* List view */}
       {view === 'list' && (
-        <div className="card overflow-hidden">
+        <div className="bg-white rounded border border-[#DFE1E6]" style={{ boxShadow: '0 1px 2px rgba(9,30,66,0.08)' }}>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Title</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Priority</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Assignee</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Created</th>
-                <th className="px-4 py-3"></th>
+              <tr className="border-b border-[#DFE1E6]">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#5E6C84] uppercase tracking-wide bg-[#F4F5F7]">Summary</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#5E6C84] uppercase tracking-wide bg-[#F4F5F7]">Priority</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#5E6C84] uppercase tracking-wide bg-[#F4F5F7]">Status</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#5E6C84] uppercase tracking-wide bg-[#F4F5F7]">Assignee</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#5E6C84] uppercase tracking-wide bg-[#F4F5F7]">Created</th>
+                <th className="px-4 py-2.5 bg-[#F4F5F7]"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No bugs found.</td></tr>}
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-[#7A869A]">No bugs found.</td></tr>
+              )}
               {filtered.map((bug) => (
-                <tr key={bug.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-800">{bug.title}</td>
-                  <td className="px-4 py-3"><PriorityBadge priority={bug.priority} /></td>
-                  <td className="px-4 py-3">
-                    <select value={bug.status} onChange={(e) => handleStatusChange(bug, e.target.value as Status)}
-                      className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-600">
+                <tr key={bug.id} className="border-b border-[#F4F5F7] hover:bg-[#F4F5F7] transition-colors">
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <Bug className="w-3.5 h-3.5 text-[#DE350B] flex-shrink-0" />
+                      <span className="font-medium text-[#172B4D]">{bug.title}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5"><PriorityBadge priority={bug.priority} /></td>
+                  <td className="px-4 py-2.5">
+                    <select
+                      value={bug.status}
+                      onChange={(e) => handleStatusChange(bug, e.target.value as Status)}
+                      className="text-xs border border-[#DFE1E6] rounded-sm px-1.5 py-0.5 bg-white text-[#42526E] focus:outline-none focus:border-[#4C9AFF]"
+                    >
                       {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                     </select>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{bug.assignee?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
+                  <td className="px-4 py-2.5">
+                    {bug.assignee ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-6 h-6 rounded-full bg-[#0052CC] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                          {bug.assignee.name[0].toUpperCase()}
+                        </span>
+                        <span className="text-sm text-[#172B4D]">{bug.assignee.name}</span>
+                      </div>
+                    ) : <span className="text-[#B3BAC5]">—</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-[#7A869A] whitespace-nowrap">
                     {formatDistanceToNow(new Date(bug.created_at), { addSuffix: true })}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <div className="flex gap-1">
-                      <button onClick={() => setEditing(bug)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => handleDelete(bug.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setEditing(bug)} className="p-1.5 text-[#7A869A] hover:text-[#0052CC] hover:bg-[#DEEBFF] rounded transition-colors">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(bug.id)} className="p-1.5 text-[#7A869A] hover:text-[#DE350B] hover:bg-[#FFEBE6] rounded transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -255,12 +323,12 @@ export default function BugBoard() {
       )}
 
       {showCreate && (
-        <Modal title="Create Bug" onClose={() => setShowCreate(false)} size="lg">
+        <Modal title="Create bug" onClose={() => setShowCreate(false)} size="lg">
           <BugForm onSave={handleCreate} onClose={() => setShowCreate(false)} />
         </Modal>
       )}
       {editing && (
-        <Modal title="Edit Bug" onClose={() => setEditing(null)} size="lg">
+        <Modal title="Edit bug" onClose={() => setEditing(null)} size="lg">
           <BugForm initial={editing} onSave={handleUpdate} onClose={() => setEditing(null)} />
         </Modal>
       )}

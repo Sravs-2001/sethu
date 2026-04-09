@@ -3,6 +3,16 @@ export type Status = 'todo' | 'in_progress' | 'review' | 'done';
 export type SprintStatus = 'planning' | 'active' | 'completed';
 export type View = 'team' | 'dashboard' | 'bugs' | 'features' | 'sprints' | 'chat';
 
+export interface Project {
+  id: string;
+  name: string;
+  key: string;
+  description?: string;
+  avatar_color: string;
+  created_by: string;
+  created_at: string;
+}
+
 export interface TeamInvite {
   email: string;
   role: 'admin' | 'member';
@@ -18,6 +28,7 @@ export interface Profile {
 
 export interface Bug {
   id: string;
+  project_id?: string;
   title: string;
   description: string;
   priority: Priority;
@@ -33,6 +44,7 @@ export interface Bug {
 
 export interface Feature {
   id: string;
+  project_id?: string;
   title: string;
   description: string;
   priority: Priority;
@@ -47,6 +59,7 @@ export interface Feature {
 
 export interface Sprint {
   id: string;
+  project_id?: string;
   name: string;
   goal?: string;
   start_date: string;

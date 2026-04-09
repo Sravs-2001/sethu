@@ -1,16 +1,29 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
 import AppLayout from './Layout/AppLayout'
+import AdminLayout from './Admin/AdminLayout'
+import CreateProject from './Project/CreateProject'
+import type { Profile, Project } from '@/types'
+
+// admin → AdminLayout by default, member → UserLayout directly
+type AppMode = 'loading' | 'create-project' | 'admin' | 'user'
 
 export default function AppEntry() {
-  const router = useRouter()
+  const router       = useRouter()
   const searchParams = useSearchParams()
-  const { setUser, channels, setActiveChannel, setActiveView } = useStore()
+  const {
+    setUser, setProject, setProjects,
+    setBugs, setFeatures, setSprints,
+    channels, setActiveChannel, setActiveView,
+  } = useStore()
+
+  const [appMode, setAppMode]   = useState<AppMode>('loading')
+  const [userRole, setUserRole] = useState<'admin' | 'member'>('member')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -32,7 +45,6 @@ export default function AppEntry() {
     if (ch) {
       setActiveChannel(ch)
       setActiveView('chat')
-      // Clean the param from URL
       router.replace('/dashboard')
     }
   }, [channels, searchParams])
@@ -40,30 +52,105 @@ export default function AppEntry() {
   async function loadProfile(authUser: User) {
     const userId = authUser.id
 
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    if (data) { setUser(data); return }
+    // 1. Try existing profile
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
 
-    const meta = authUser.user_metadata ?? {}
-    const name =
-      meta.full_name || meta.name || meta.user_name ||
-      authUser.email?.split('@')[0] || 'User'
-    const avatar_url = meta.avatar_url || meta.picture || null
+    let profile: Profile
+    if (existing) {
+      profile = existing
+      setUser(existing)
+    } else {
+      // 2. Create new profile — direct signup always gets admin
+      const meta       = authUser.user_metadata ?? {}
+      const name       = meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User'
+      const avatar_url = meta.avatar_url || meta.picture || null
+      const role: 'admin' | 'member' = (meta.role as 'admin' | 'member') || 'admin'
 
-    try {
-      const { count } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-      const role = (count ?? 1) === 0 ? 'admin' : 'member'
       const { data: created } = await supabase
         .from('profiles')
         .upsert({ id: userId, name, avatar_url, role })
         .select()
         .single()
-      if (created) { setUser(created); return }
-    } catch (_) {}
 
-    setUser({ id: userId, name, avatar_url, role: 'member', created_at: new Date().toISOString() })
+      profile = created ?? { id: userId, name, avatar_url, role, created_at: new Date().toISOString() }
+      setUser(profile)
+    }
+
+    setUserRole(profile.role)
+
+    // 3. Load projects
+    await checkProject(profile.role)
   }
 
-  return <AppLayout />
+  async function checkProject(role: 'admin' | 'member') {
+    const { data: allProjects, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.warn('projects table not found — run the SQL migration:', error.message)
+      setAppMode('create-project')
+      return
+    }
+
+    if (allProjects && allProjects.length > 0) {
+      setProjects(allProjects as Project[])
+      setProject(allProjects[0] as Project)
+      // Admins start in admin panel; members go straight to project view
+      setAppMode(role === 'admin' ? 'admin' : 'user')
+    } else {
+      setAppMode('create-project')
+    }
+  }
+
+  // Admin created the first project → jump to admin layout
+  function handleProjectCreated(project: Project) {
+    setProjects([project])
+    setProject(project)
+    setAppMode(userRole === 'admin' ? 'admin' : 'user')
+  }
+
+  // Admin clicks "Open project" in the admin panel → enter user layout
+  function handleEnterProject(project: Project) {
+    setProject(project)
+    setBugs([])
+    setFeatures([])
+    setSprints([])
+    setAppMode('user')
+  }
+
+  // Admin clicks "Back to Admin Panel" → return to admin layout
+  function handleBackToAdmin() {
+    setAppMode('admin')
+  }
+
+  // ── Render ──────────────────────────────────────────────────────
+  if (appMode === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#F4F5F7] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-[#0052CC] border-t-transparent animate-spin" />
+          <p className="text-sm text-[#5E6C84]">Loading…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (appMode === 'create-project') {
+    return <CreateProject onCreated={handleProjectCreated} />
+  }
+
+  if (appMode === 'admin') {
+    return <AdminLayout onEnterProject={handleEnterProject} />
+  }
+
+  // user mode — admins get a "back to admin" bar, members don't
+  return (
+    <AppLayout onBackToAdmin={userRole === 'admin' ? handleBackToAdmin : undefined} />
+  )
 }

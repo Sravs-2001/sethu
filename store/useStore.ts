@@ -1,11 +1,18 @@
 'use client'
 
 import { create } from 'zustand'
-import type { Bug, Feature, Sprint, Channel, Message, Profile, View } from '@/types'
+import type { Bug, Feature, Sprint, Channel, Message, Profile, Project, View } from '@/types'
 
 interface AppState {
   user: Profile | null
   setUser: (user: Profile | null) => void
+
+  projects: Project[]
+  setProjects: (projects: Project[]) => void
+  addProject: (project: Project) => void
+
+  project: Project | null
+  setProject: (project: Project | null) => void
 
   activeView: View
   setActiveView: (view: View) => void
@@ -42,6 +49,13 @@ interface AppState {
 export const useStore = create<AppState>((set) => ({
   user: null,
   setUser: (user) => set({ user }),
+
+  projects: [],
+  setProjects: (projects) => set({ projects }),
+  addProject: (project) => set((s) => ({ projects: [...s.projects, project] })),
+
+  project: null,
+  setProject: (project) => set({ project }),
 
   activeView: 'team',
   setActiveView: (activeView) => set({ activeView }),
