@@ -57,7 +57,7 @@ export const useStore = create<AppState>((set) => ({
   project: null,
   setProject: (project) => set({ project }),
 
-  activeView: 'team',
+  activeView: 'board',
   setActiveView: (activeView) => set({ activeView }),
 
   bugs: [],

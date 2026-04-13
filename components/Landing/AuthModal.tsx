@@ -2,34 +2,35 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { X, Eye, EyeOff, CheckCircle, Bug, Rocket, MessageSquare, Sparkles } from 'lucide-react'
-import ArrowheadIcon from '@/components/ui/ArrowheadIcon'
+import { X, Eye, EyeOff, CheckCircle, ArrowLeft } from 'lucide-react'
 import { GoogleIcon, GitHubIcon, MicrosoftIcon } from '@/components/ui/OAuthIcons'
 import clsx from 'clsx'
 
 type Mode = 'login' | 'register'
+
+const DEMO_USERS = [
+  { name: 'Alice Johnson', email: 'alice@mailinator.com', role: 'Admin', color: '#0052CC' },
+  { name: 'Bob Smith',     email: 'bob@mailinator.com',   role: 'Member', color: '#6554C0' },
+  { name: 'Carol Davis',   email: 'carol@mailinator.com', role: 'Member', color: '#36B37E' },
+  { name: 'David Wilson',  email: 'david@mailinator.com', role: 'Member', color: '#FF5630' },
+  { name: 'Emma Brown',    email: 'emma@mailinator.com',  role: 'Member', color: '#00B8D9' },
+]
 
 interface Props {
   defaultMode?: Mode
   onClose: () => void
 }
 
-const APP_FEATURES = [
-  { icon: Bug,           color: 'text-rose-400',    label: 'Bug tracker & Kanban' },
-  { icon: Rocket,        color: 'text-sky-400',     label: 'Sprint planning boards' },
-  { icon: Sparkles,      color: 'text-violet-400',  label: 'Feature roadmap' },
-  { icon: MessageSquare, color: 'text-indigo-400',  label: 'Real-time team chat' },
-]
-
 export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
-  const [mode, setMode] = useState<Mode>(defaultMode)
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  const [mode, setMode]       = useState<Mode>(defaultMode)
+  const [name, setName]       = useState('')
+  const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
-  const [loading, setLoading] = useState<string | null>(null)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [loading, setLoading]  = useState<string | null>(null)
+  const [error, setError]      = useState('')
+  const [success, setSuccess]  = useState('')
+  const [showDemo, setShowDemo] = useState(false)
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -43,6 +44,13 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
   }, [])
 
   function switchMode(m: Mode) { setMode(m); setError(''); setSuccess('') }
+
+  function quickFill(u: typeof DEMO_USERS[0]) {
+    setEmail(u.email)
+    setPassword('demo1234')
+    setShowDemo(false)
+    setError('')
+  }
 
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault()
@@ -76,13 +84,13 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/api/auth/callback` : '',
+        redirectTo: typeof window !== 'undefined'
+          ? `${window.location.origin}/api/auth/callback`
+          : '',
       },
     })
     if (error) {
-      setError(error.message.includes('not enabled')
-        ? `${provider === 'azure' ? 'Microsoft' : provider.charAt(0).toUpperCase() + provider.slice(1)} login isn't enabled yet. Use email below.`
-        : error.message)
+      setError(`${provider === 'azure' ? 'Microsoft' : provider} login isn't enabled. Use email below.`)
       setLoading(null)
     }
   }
@@ -102,162 +110,219 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(6, 13, 31, 0.85)', backdropFilter: 'blur(10px)' }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      style={{ background: 'rgba(9,30,66,0.6)', backdropFilter: 'blur(6px)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-3xl rounded-3xl shadow-2xl animate-slide-in overflow-hidden flex min-h-[540px]">
+      <div className="w-full max-w-md bg-white rounded-2xl overflow-hidden shadow-2xl animate-slide-in">
 
-        {/* Left: branded dark panel */}
-        <div className="hidden md:flex flex-col w-72 flex-shrink-0 p-8 relative overflow-hidden"
-          style={{ background: 'linear-gradient(160deg, #060d1f 0%, #0a1628 50%, #0d1f3c 100%)' }}>
-          <div className="dot-grid absolute inset-0 opacity-50 pointer-events-none" />
-          <div className="relative z-10 flex flex-col h-full">
-            <div className="flex items-center gap-2.5 mb-8">
-              <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                <ArrowheadIcon className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-white text-xl font-black">sethu</span>
-            </div>
-            <h2 className="text-white text-2xl font-black leading-tight mb-2">
-              Everything your<br />team needs.
-            </h2>
-            <p className="text-white/40 text-sm mb-8 leading-relaxed">
-              One workspace for bugs, features, sprints, and team chat.
-            </p>
-            <div className="space-y-3 mb-8">
-              {APP_FEATURES.map(({ icon: Icon, color, label }) => (
-                <div key={label} className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-white/8 border border-white/10 flex items-center justify-center flex-shrink-0">
-                    <Icon className={`w-3.5 h-3.5 ${color}`} />
-                  </div>
-                  <span className="text-white/60 text-sm">{label}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-auto grid grid-cols-2 gap-2.5">
-              {[['10k+', 'Bugs resolved'], ['500+', 'Teams']].map(([n, l]) => (
-                <div key={l} className="bg-white/6 border border-white/10 rounded-2xl p-3.5">
-                  <div className="text-white font-black text-xl">{n}</div>
-                  <div className="text-white/35 text-xs mt-0.5">{l}</div>
-                </div>
-              ))}
+        {/* Header */}
+        <div className="relative px-8 pt-8 pb-5 text-center"
+          style={{ background: 'linear-gradient(135deg, #0052CC 0%, #0065FF 100%)' }}>
+          <button onClick={onClose}
+            className="absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center text-white/60 hover:bg-white/20 hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+
+          {/* Logo */}
+          <div className="flex justify-center mb-3">
+            <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center">
+              <svg viewBox="0 0 28 28" className="w-7 h-7" fill="none">
+                <path d="M14 2L3 13l5 5 6-6 6 6 5-5L14 2z" fill="white" opacity="0.9" />
+                <path d="M14 26L3 15l5-5 6 6 6-6 5 5-11 11z" fill="white" opacity="0.6" />
+              </svg>
             </div>
           </div>
+          <h1 className="text-xl font-black text-white">
+            {mode === 'login' ? 'Log in to Sethu' : 'Create your account'}
+          </h1>
+          <p className="text-white/60 text-sm mt-1">
+            {mode === 'login' ? 'Welcome back! Sign in to continue.' : 'Start managing your projects today.'}
+          </p>
         </div>
 
-        {/* Right: form panel */}
-        <div className="flex-1 bg-white flex flex-col">
-          <div className="flex border-b border-gray-100 relative">
-            <button onClick={onClose}
-              className="absolute top-3 right-3 w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors">
-              <X className="w-3.5 h-3.5" />
+        {/* Tab switcher */}
+        <div className="flex border-b border-[#DFE1E6]">
+          {(['login', 'register'] as Mode[]).map(m => (
+            <button key={m} onClick={() => switchMode(m)}
+              className={clsx(
+                'flex-1 py-3 text-sm font-semibold transition-all border-b-2',
+                mode === m
+                  ? 'border-[#0052CC] text-[#0052CC]'
+                  : 'border-transparent text-[#5E6C84] hover:text-[#172B4D]',
+              )}>
+              {m === 'login' ? 'Sign In' : 'Create Account'}
             </button>
-            {(['login', 'register'] as Mode[]).map((m) => (
-              <button key={m} onClick={() => switchMode(m)}
-                className={clsx('flex-1 py-4 text-sm font-bold transition-all border-b-2',
-                  mode === m ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-400 hover:text-gray-700')}>
-                {m === 'login' ? 'Sign In' : 'Create Account'}
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="px-8 py-6">
+
+          {/* Demo accounts */}
+          <div className="mb-5">
+            <button
+              onClick={() => setShowDemo(o => !o)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors text-left"
+              style={{ background: '#DEEBFF', color: '#0052CC' }}
+              onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = '#C6D9FF')}
+              onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#DEEBFF')}
+            >
+              <span className="flex-1">⚡ Use a demo account</span>
+              <span className="text-[11px] font-medium text-[#5E6C84]">password: demo1234</span>
+            </button>
+
+            {showDemo && (
+              <div className="mt-2 rounded-lg border border-[#DFE1E6] overflow-hidden animate-slide-in">
+                {DEMO_USERS.map(u => (
+                  <button
+                    key={u.email}
+                    onClick={() => quickFill(u)}
+                    className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-[#F4F5F7] transition-colors border-b border-[#F4F5F7] last:border-b-0"
+                  >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                      style={{ background: u.color }}>
+                      {u.name[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-semibold text-[#172B4D]">{u.name}</div>
+                      <div className="text-[11px] text-[#7A869A]">{u.email}</div>
+                    </div>
+                    <span className={clsx(
+                      'text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0',
+                      u.role === 'Admin' ? 'bg-[#FFFAE6] text-amber-700' : 'bg-[#F4F5F7] text-[#5E6C84]',
+                    )}>{u.role}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Social login */}
+          <div className="grid grid-cols-3 gap-2 mb-5">
+            {[
+              { id: 'google' as const, Icon: GoogleIcon, label: 'Google' },
+              { id: 'github' as const, Icon: GitHubIcon, label: 'GitHub' },
+              { id: 'azure'  as const, Icon: MicrosoftIcon, label: 'Microsoft' },
+            ].map(({ id, Icon, label }) => (
+              <button key={id} onClick={() => handleOAuth(id)} disabled={!!loading}
+                className={clsx(
+                  'flex items-center justify-center gap-1.5 py-2.5 border border-[#DFE1E6] rounded-lg text-[12px] font-semibold text-[#42526E] hover:bg-[#F4F5F7] transition-colors',
+                  loading && loading !== id && 'opacity-40 pointer-events-none',
+                )}>
+                {loading === id
+                  ? <span className="w-4 h-4 border-2 border-[#0052CC] border-t-transparent rounded-full animate-spin" />
+                  : <Icon className="w-4 h-4" />
+                }
+                {label}
               </button>
             ))}
           </div>
 
-          <div className="flex-1 px-7 py-6 overflow-y-auto">
+          {/* Divider */}
+          <div className="flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px bg-[#DFE1E6]" />
+            <span className="text-xs text-[#7A869A] font-medium">or with email</span>
+            <div className="flex-1 h-px bg-[#DFE1E6]" />
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleEmail} className="space-y-3.5">
             {mode === 'register' && (
-              <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3 mb-5 text-sm text-blue-700">
-                <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
-                <span>First person to register becomes the <strong>Admin</strong> — set up your workspace.</span>
+              <div>
+                <label className="block text-xs font-semibold text-[#5E6C84] mb-1.5">Full Name</label>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="John Doe"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  required
+                  autoFocus
+                />
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-2 mb-5">
-              {[
-                { id: 'google' as const, Icon: GoogleIcon, label: 'Google' },
-                { id: 'github' as const, Icon: GitHubIcon, label: 'GitHub' },
-                { id: 'azure'  as const, Icon: MicrosoftIcon, label: 'Microsoft' },
-              ].map(({ id, Icon, label }) => (
-                <button key={id} onClick={() => handleOAuth(id)} disabled={!!loading} title={`Continue with ${label}`}
-                  className={clsx('flex flex-col items-center gap-1.5 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-[11px] font-semibold text-gray-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-all active:scale-95',
-                    loading && loading !== id && 'opacity-40 pointer-events-none')}>
-                  {loading === id
-                    ? <span className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                    : <Icon className="w-5 h-5" />}
-                  {label}
-                </button>
-              ))}
+            <div>
+              <label className="block text-xs font-semibold text-[#5E6C84] mb-1.5">Email</label>
+              <input
+                className="input"
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                autoFocus={mode === 'login'}
+              />
             </div>
 
-            <div className="flex items-center gap-3 mb-5">
-              <div className="flex-1 h-px bg-gray-100" />
-              <span className="text-xs text-gray-400 font-medium">or with email</span>
-              <div className="flex-1 h-px bg-gray-100" />
-            </div>
-
-            <form onSubmit={handleEmail} className="space-y-3.5">
-              {mode === 'register' && (
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Full Name</label>
-                  <input className="input" type="text" placeholder="John Doe" value={name}
-                    onChange={(e) => setName(e.target.value)} required autoFocus />
-                </div>
-              )}
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Email</label>
-                <input className="input" type="email" placeholder="you@company.com" value={email}
-                  onChange={(e) => setEmail(e.target.value)} required autoFocus={mode === 'login'} />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Password</label>
-                  {mode === 'login' && (
-                    <button type="button" onClick={handleMagicLink} disabled={!!loading}
-                      className="text-xs text-blue-600 font-semibold hover:underline">
-                      {loading === 'magic' ? 'Sending…' : 'Forgot password?'}
-                    </button>
-                  )}
-                </div>
-                <div className="relative">
-                  <input className="input pr-11" type={showPass ? 'text' : 'password'}
-                    placeholder="Min. 6 characters" value={password}
-                    onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-                  <button type="button" onClick={() => setShowPass(!showPass)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-[#5E6C84]">Password</label>
+                {mode === 'login' && (
+                  <button type="button" onClick={handleMagicLink} disabled={!!loading}
+                    className="text-xs text-[#0052CC] font-semibold hover:underline">
+                    {loading === 'magic' ? 'Sending…' : 'Forgot password?'}
                   </button>
-                </div>
-              </div>
-
-              {error && (
-                <div className="flex items-start gap-2 bg-red-50 border border-red-100 text-red-600 px-3.5 py-3 rounded-xl text-sm">
-                  <span>⚠️</span><span>{error}</span>
-                </div>
-              )}
-              {success && (
-                <div className="flex items-start gap-2 bg-green-50 border border-green-100 text-green-700 px-3.5 py-3 rounded-xl text-sm">
-                  <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /><span>{success}</span>
-                </div>
-              )}
-
-              <button type="submit" disabled={!!loading}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-sm hover:shadow-md transition-all active:scale-[0.98] text-sm">
-                {loading === 'email' ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    {mode === 'login' ? 'Signing in…' : 'Creating account…'}
-                  </span>
-                ) : (
-                  mode === 'login' ? 'Sign in to Sethu →' : 'Create my workspace →'
                 )}
-              </button>
-            </form>
+              </div>
+              <div className="relative">
+                <input
+                  className="input pr-11"
+                  type={showPass ? 'text' : 'password'}
+                  placeholder="Min. 6 characters"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+                <button type="button" onClick={() => setShowPass(s => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#97A0AF] hover:text-[#42526E] transition-colors">
+                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
 
-            <p className="text-center text-sm text-gray-500 mt-4">
-              {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-              <button onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-                className="text-blue-600 font-bold hover:underline">
-                {mode === 'login' ? 'Sign up free' : 'Sign in'}
-              </button>
-            </p>
-          </div>
+            {error && (
+              <div className="flex items-start gap-2 bg-[#FFEBE6] border border-red-100 text-[#DE350B] px-3 py-2.5 rounded-lg text-sm">
+                <span className="flex-shrink-0">⚠️</span>
+                <span>{error}</span>
+              </div>
+            )}
+            {success && (
+              <div className="flex items-start gap-2 bg-[#E3FCEF] border border-green-100 text-[#006644] px-3 py-2.5 rounded-lg text-sm">
+                <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>{success}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={!!loading}
+              className="w-full py-2.5 font-bold rounded-lg text-white text-sm transition-all disabled:opacity-60"
+              style={{ background: '#0052CC' }}
+              onMouseEnter={e => !loading && ((e.currentTarget as HTMLElement).style.background = '#0747A6')}
+              onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#0052CC')}
+            >
+              {loading === 'email' ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  {mode === 'login' ? 'Signing in…' : 'Creating account…'}
+                </span>
+              ) : (
+                mode === 'login' ? 'Log in' : 'Create account'
+              )}
+            </button>
+          </form>
+
+          <p className="text-center text-sm text-[#5E6C84] mt-4">
+            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+            <button
+              onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
+              className="text-[#0052CC] font-semibold hover:underline"
+            >
+              {mode === 'login' ? 'Sign up free' : 'Sign in'}
+            </button>
+          </p>
         </div>
       </div>
     </div>

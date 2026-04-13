@@ -1,7 +1,8 @@
 export type Priority = 'critical' | 'high' | 'medium' | 'low';
 export type Status = 'todo' | 'in_progress' | 'review' | 'done';
 export type SprintStatus = 'planning' | 'active' | 'completed';
-export type View = 'team' | 'dashboard' | 'bugs' | 'features' | 'sprints' | 'chat';
+export type IssueType = 'bug' | 'story' | 'task' | 'epic';
+export type View = 'board' | 'backlog' | 'issues' | 'sprints' | 'dashboard' | 'team' | 'chat' | 'bugs' | 'features';
 
 export interface Project {
   id: string;
@@ -83,3 +84,6 @@ export interface Message {
   content: string;
   created_at: string;
 }
+
+// Unified issue type for board/backlog views
+export type UnifiedIssue = (Bug & { kind: 'bug' }) | (Feature & { kind: 'feature' });
