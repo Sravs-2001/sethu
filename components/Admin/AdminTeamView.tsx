@@ -6,7 +6,7 @@ import { useStore } from '@/store/useStore'
 import {
   Users, Upload, X, Mail, Shield, User,
   CheckCircle, ChevronRight, Plus, ArrowLeft, Loader2,
-  Link2, Copy, Check, Zap, RefreshCw,
+  Link2, Copy, Check, RefreshCw, ChevronDown,
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { TeamInvite } from '@/types'
@@ -15,27 +15,22 @@ import { formatDistanceToNow } from 'date-fns'
 
 type Step = 'list' | 'invite' | 'roles' | 'sending' | 'done'
 
-const DEMO_USERS = [
-  { name: 'Alice Johnson', email: 'alice@mailinator.com', role: 'admin'  as const, color: '#0052CC' },
-  { name: 'Bob Smith',     email: 'bob@mailinator.com',   role: 'member' as const, color: '#6554C0' },
-  { name: 'Carol Davis',   email: 'carol@mailinator.com', role: 'member' as const, color: '#36B37E' },
-  { name: 'David Wilson',  email: 'david@mailinator.com', role: 'member' as const, color: '#FF5630' },
-  { name: 'Emma Brown',    email: 'emma@mailinator.com',  role: 'member' as const, color: '#00B8D9' },
-]
-
-// ── Invite Link Modal ────────────────────────────────────────────────────
+// ── Invite Link Modal ─────────────────────────────────────────────────────
 function InviteLinkModal({ onClose }: { onClose: () => void }) {
+  const { projects } = useStore()
   const [role, setRole]           = useState<'admin' | 'member'>('member')
+  const [projectId, setProjectId] = useState<string>(projects[0]?.id ?? '')
   const [link, setLink]           = useState('')
   const [generating, setGenerating] = useState(false)
   const [copied, setCopied]       = useState(false)
 
   async function generateLink() {
+    if (!projectId) return
     setGenerating(true)
     const res = await fetch('/api/invite-link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ role, project_id: projectId }),
     })
     const data = await res.json()
     setLink(data.link ?? '')
@@ -60,9 +55,33 @@ function InviteLinkModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="px-6 py-5 space-y-4">
-          <p className="text-sm text-[#5E6C84]">
-            Share this link with someone you'd like to invite. The link is valid for <strong>7 days</strong>.
+          <p className="text-xs text-[#5E6C84]">
+            Share this link to invite someone directly into a project. Valid for <strong>7 days</strong>.
           </p>
+
+          {/* Project selector */}
+          {projects.length > 1 && (
+            <div>
+              <label className="block text-xs font-semibold text-[#5E6C84] mb-1.5">Invite to project</label>
+              <div className="relative">
+                <select
+                  value={projectId}
+                  onChange={e => { setProjectId(e.target.value); setLink('') }}
+                  className="input appearance-none pr-8 cursor-pointer">
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.key})</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#7A869A] pointer-events-none" />
+              </div>
+            </div>
+          )}
+          {projects.length === 1 && (
+            <div className="flex items-center gap-2 text-xs text-[#5E6C84]">
+              <span>Project:</span>
+              <span className="font-semibold text-[#172B4D]">{projects[0].name}</span>
+            </div>
+          )}
 
           {/* Role selector */}
           <div>
@@ -89,7 +108,7 @@ function InviteLinkModal({ onClose }: { onClose: () => void }) {
 
           {/* Generate button */}
           {!link && (
-            <button onClick={generateLink} disabled={generating} className="btn-primary w-full justify-center">
+            <button onClick={generateLink} disabled={generating || !projectId} className="btn-primary w-full justify-center">
               {generating ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</> : <><Link2 className="w-3.5 h-3.5" /> Generate invite link</>}
             </button>
           )}
@@ -118,24 +137,80 @@ function InviteLinkModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+// ── Member table ──────────────────────────────────────────────────────────
+function MemberTable({ profiles, onRoleChange }: {
+  profiles: { id: string; name: string; avatar_url?: string; role: string; created_at: string }[]
+  onRoleChange: (id: string, role: 'admin' | 'member') => void
+}) {
+  return (
+    <div className="bg-white rounded-lg border border-[#DFE1E6] overflow-hidden"
+      style={{ boxShadow: '0 1px 2px rgba(9,30,66,0.08)' }}>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-[#F4F5F7]">
+            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#5E6C84] uppercase tracking-wider">Member</th>
+            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#5E6C84] uppercase tracking-wider">Role</th>
+            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#5E6C84] uppercase tracking-wider">Joined</th>
+            <th className="px-4 py-2.5" />
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#F4F5F7]">
+          {profiles.map(p => (
+            <tr key={p.id} className="hover:bg-[#F4F5F7] transition-colors">
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  {p.avatar_url ? (
+                    <img src={p.avatar_url} alt={p.name} className="w-7 h-7 rounded-full object-cover border border-[#DFE1E6] flex-shrink-0" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-[#0052CC] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                      {p.name[0]?.toUpperCase() ?? '?'}
+                    </div>
+                  )}
+                  <span className="font-medium text-[#172B4D] text-sm">{p.name}</span>
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                <span className={clsx(
+                  'text-[11px] font-semibold px-2 py-0.5 rounded-full border capitalize',
+                  p.role === 'admin'
+                    ? 'bg-[#FFFAE6] text-amber-700 border-amber-200'
+                    : 'bg-[#F4F5F7] text-[#5E6C84] border-[#DFE1E6]'
+                )}>
+                  {p.role}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-xs text-[#7A869A]">
+                {formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}
+              </td>
+              <td className="px-4 py-3 text-right">
+                <button
+                  onClick={() => onRoleChange(p.id, p.role === 'admin' ? 'member' : 'admin')}
+                  className="text-xs font-semibold text-[#0052CC] hover:underline whitespace-nowrap">
+                  Make {p.role === 'admin' ? 'member' : 'admin'}
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ── Main AdminTeamView ────────────────────────────────────────────────────
 export default function AdminTeamView() {
   const { profiles, setProfiles } = useStore()
 
-  const [step, setStep]                 = useState<Step>('list')
-  const [emailInput, setEmailInput]     = useState('')
-  const [emails, setEmails]             = useState<string[]>([])
-  const [invites, setInvites]           = useState<TeamInvite[]>([])
-  const [dragOver, setDragOver]         = useState(false)
-  const [sending, setSending]           = useState(false)
-  const [sentCount, setSentCount]       = useState(0)
+  const [step, setStep]             = useState<Step>('list')
+  const [emailInput, setEmailInput] = useState('')
+  const [emails, setEmails]         = useState<string[]>([])
+  const [invites, setInvites]       = useState<TeamInvite[]>([])
+  const [dragOver, setDragOver]     = useState(false)
+  const [sending, setSending]       = useState(false)
+  const [sentCount, setSentCount]   = useState(0)
   const [rolePopupIdx, setRolePopupIdx] = useState(0)
-  const [errors, setErrors]             = useState<string[]>([])
+  const [errors, setErrors]         = useState<string[]>([])
   const [showInviteLink, setShowInviteLink] = useState(false)
-  const [seedingDemo, setSeedingDemo]   = useState(false)
-  const [seedStatus, setSeedStatus]     = useState<string>('')
-  const [seedingProjects, setSeedingProjects] = useState(false)
-  const [seedProjectStatus, setSeedProjectStatus] = useState<string>('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -228,42 +303,6 @@ export default function AdminTeamView() {
     if (data) setProfiles(data)
   }
 
-  async function seedDemoUsers() {
-    setSeedingDemo(true)
-    setSeedStatus('')
-    try {
-      const res = await fetch('/api/demo-users', { method: 'POST' })
-      const data = await res.json()
-      const created = data.results?.filter((r: any) => r.status === 'created').length ?? 0
-      const existing = data.results?.filter((r: any) => r.status === 'exists').length ?? 0
-      setSeedStatus(`✓ ${created} demo users created, ${existing} already existed. Password: demo1234`)
-      // Reload profiles
-      const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: true })
-      if (profiles) setProfiles(profiles)
-    } catch {
-      setSeedStatus('Error seeding demo users. Check service role key.')
-    }
-    setSeedingDemo(false)
-  }
-
-  async function seedProjectData() {
-    setSeedingProjects(true)
-    setSeedProjectStatus('')
-    try {
-      const res = await fetch('/api/seed-project-members', { method: 'POST' })
-      const data = await res.json()
-      if (data.ok) {
-        const summary = data.results?.map((r: any) => `${r.project}: ${r.bugs} bugs, ${r.features} features`).join(' | ')
-        setSeedProjectStatus(`✓ Seeded: ${summary}`)
-      } else {
-        setSeedProjectStatus(`Error: ${data.error ?? 'Unknown error'}`)
-      }
-    } catch {
-      setSeedProjectStatus('Error seeding project data.')
-    }
-    setSeedingProjects(false)
-  }
-
   const admins  = profiles.filter(p => p.role === 'admin')
   const members = profiles.filter(p => p.role === 'member')
 
@@ -276,71 +315,19 @@ export default function AdminTeamView() {
           {/* Header */}
           <div className="flex items-center flex-wrap gap-3">
             <div>
-              <h1 className="text-xl font-bold text-[#172B4D]">People</h1>
+              <h1 className="text-xl font-bold text-[#172B4D]">Workspace Members</h1>
               <p className="text-sm text-[#5E6C84] mt-0.5">
-                {profiles.length} member{profiles.length !== 1 ? 's' : ''} in this workspace
+                {profiles.length} member{profiles.length !== 1 ? 's' : ''} across all projects
               </p>
             </div>
             <div className="ml-auto flex items-center gap-2 flex-wrap">
-              {/* Copy invite link */}
               <button onClick={() => setShowInviteLink(true)}
                 className="btn-secondary flex items-center gap-1.5 text-xs">
                 <Link2 className="w-3.5 h-3.5" /> Copy invite link
               </button>
-              {/* Email invite */}
               <button onClick={() => setStep('invite')} className="btn-primary text-xs">
                 <Plus className="w-3.5 h-3.5" /> Invite people
               </button>
-            </div>
-          </div>
-
-          {/* Demo users banner */}
-          <div className="rounded-xl border border-[#DFE1E6] p-4" style={{ background: '#F0F7FF' }}>
-            <div className="flex items-start gap-3 flex-wrap">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <Zap className="w-4 h-4 text-[#0052CC]" />
-                  <span className="text-sm font-bold text-[#172B4D]">Demo Team Members</span>
-                </div>
-                <p className="text-xs text-[#5E6C84] mb-3">
-                  Seed 5 example users with @mailinator.com accounts. They can log in with password <code className="bg-white px-1.5 py-0.5 rounded border border-[#DFE1E6] text-xs font-mono">demo1234</code>
-                </p>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {DEMO_USERS.map(u => (
-                    <div key={u.email} className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-full border border-[#DFE1E6] text-xs">
-                      <div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold"
-                        style={{ background: u.color }}>
-                        {u.name[0]}
-                      </div>
-                      <span className="text-[#172B4D] font-medium">{u.name.split(' ')[0]}</span>
-                      <span className={clsx('text-[9px] font-semibold',
-                        u.role === 'admin' ? 'text-amber-600' : 'text-[#5E6C84]')}>
-                        {u.role}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {seedStatus && (
-                  <p className="text-xs font-medium" style={{ color: seedStatus.startsWith('✓') ? '#006644' : '#DE350B' }}>
-                    {seedStatus}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-col gap-2 flex-shrink-0">
-                <button onClick={seedDemoUsers} disabled={seedingDemo}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg border border-[#0052CC] text-[#0052CC] hover:bg-[#DEEBFF] transition-colors disabled:opacity-50">
-                  {seedingDemo ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Seeding…</> : <><Zap className="w-3.5 h-3.5" /> Seed demo users</>}
-                </button>
-                <button onClick={seedProjectData} disabled={seedingProjects}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg border border-[#36B37E] text-[#006644] hover:bg-[#E3FCEF] transition-colors disabled:opacity-50">
-                  {seedingProjects ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Seeding…</> : <><Zap className="w-3.5 h-3.5" /> Seed project data</>}
-                </button>
-                {seedProjectStatus && (
-                  <p className="text-[11px] font-medium max-w-[200px]" style={{ color: seedProjectStatus.startsWith('✓') ? '#006644' : '#DE350B' }}>
-                    {seedProjectStatus}
-                  </p>
-                )}
-              </div>
             </div>
           </div>
 
@@ -374,13 +361,13 @@ export default function AdminTeamView() {
                 <Users className="w-7 h-7 text-[#B3BAC5]" />
               </div>
               <p className="text-sm font-medium text-[#172B4D] mb-1">No team members yet</p>
-              <p className="text-sm text-[#7A869A] mb-4">Invite people or seed demo accounts to get started.</p>
+              <p className="text-sm text-[#7A869A] mb-4">Invite people to get started.</p>
               <div className="flex gap-2">
                 <button onClick={() => setStep('invite')} className="btn-primary">
                   <Plus className="w-4 h-4" /> Invite people
                 </button>
-                <button onClick={seedDemoUsers} disabled={seedingDemo} className="btn-secondary">
-                  <Zap className="w-4 h-4" /> Seed demo users
+                <button onClick={() => setShowInviteLink(true)} className="btn-secondary">
+                  <Link2 className="w-4 h-4" /> Invite link
                 </button>
               </div>
             </div>
@@ -533,68 +520,6 @@ export default function AdminTeamView() {
 
       {/* Invite link modal */}
       {showInviteLink && <InviteLinkModal onClose={() => setShowInviteLink(false)} />}
-    </div>
-  )
-}
-
-// ── Member table ─────────────────────────────────────────────────────────
-function MemberTable({ profiles, onRoleChange }: {
-  profiles: { id: string; name: string; avatar_url?: string; role: string; created_at: string }[]
-  onRoleChange: (id: string, role: 'admin' | 'member') => void
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-[#DFE1E6] overflow-hidden"
-      style={{ boxShadow: '0 1px 3px rgba(9,30,66,0.08)' }}>
-      {/* Table header */}
-      <div className="grid grid-cols-[auto_1fr_auto_auto] items-center px-4 py-2.5 border-b border-[#DFE1E6] bg-[#F4F5F7]">
-        <div className="w-8" />
-        <span className="text-[11px] font-semibold text-[#5E6C84] uppercase tracking-wider ml-3">Name</span>
-        <span className="text-[11px] font-semibold text-[#5E6C84] uppercase tracking-wider mr-6">Role</span>
-        <span className="text-[11px] font-semibold text-[#5E6C84] uppercase tracking-wider">Actions</span>
-      </div>
-
-      <div className="divide-y divide-[#F4F5F7]">
-        {profiles.map(p => (
-          <div key={p.id} className="flex items-center gap-3 px-4 py-3 hover:bg-[#F4F5F7] transition-colors">
-            {/* Avatar */}
-            <div className="relative flex-shrink-0">
-              {p.avatar_url ? (
-                <img src={p.avatar_url} alt={p.name} className="w-8 h-8 rounded-full object-cover border border-[#DFE1E6]" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-[#0052CC] flex items-center justify-center text-white text-xs font-bold">
-                  {p.name[0]?.toUpperCase() ?? '?'}
-                </div>
-              )}
-            </div>
-
-            {/* Name + joined */}
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-semibold text-[#172B4D] truncate">{p.name}</div>
-              <div className="text-[11px] text-[#7A869A]">
-                Joined {formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}
-              </div>
-            </div>
-
-            {/* Role badge */}
-            <span className={clsx(
-              'text-[11px] font-semibold px-2.5 py-1 rounded-full border capitalize flex-shrink-0',
-              p.role === 'admin'
-                ? 'bg-[#FFFAE6] text-amber-700 border-amber-200'
-                : 'bg-[#F4F5F7] text-[#5E6C84] border-[#DFE1E6]',
-            )}>
-              {p.role === 'admin' ? '⚡ Admin' : '● Member'}
-            </span>
-
-            {/* Toggle role */}
-            <button
-              onClick={() => onRoleChange(p.id, p.role === 'admin' ? 'member' : 'admin')}
-              className="flex-shrink-0 text-xs font-semibold text-[#0052CC] hover:bg-[#DEEBFF] px-2.5 py-1 rounded-full transition-colors border border-[#0052CC]/20"
-            >
-              {p.role === 'admin' ? 'Make member' : 'Make admin'}
-            </button>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }

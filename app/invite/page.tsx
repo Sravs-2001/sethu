@@ -8,20 +8,28 @@ import clsx from 'clsx'
 
 export const dynamic = 'force-dynamic'
 
+interface TokenPayload {
+  role: 'admin' | 'member'
+  project_id: string
+  exp: number
+  v: number
+}
+
 function InvitePage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const token = searchParams.get('t')
 
-  const [status, setStatus] = useState<'loading' | 'valid' | 'invalid' | 'expired'>('loading')
-  const [role, setRole]     = useState<'admin' | 'member'>('member')
-  const [mode, setMode]     = useState<'register' | 'login'>('register')
-  const [name, setName]     = useState('')
-  const [email, setEmail]   = useState('')
+  const [status, setStatus]   = useState<'loading' | 'valid' | 'invalid' | 'expired'>('loading')
+  const [payload, setPayload] = useState<TokenPayload | null>(null)
+  const [projectName, setProjectName] = useState<string>('')
+  const [mode, setMode]       = useState<'register' | 'login'>('register')
+  const [name, setName]       = useState('')
+  const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError]   = useState('')
+  const [error, setError]     = useState('')
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
@@ -29,14 +37,15 @@ function InvitePage() {
 
     fetch(`/api/invite-link?t=${token}`)
       .then(r => r.json())
-      .then(data => {
+      .then(async data => {
         if (data.valid) {
-          setRole(data.role)
+          setPayload({ role: data.role, project_id: data.project_id, exp: 0, v: 2 })
           setStatus('valid')
-          // Store invite token for post-login role assignment
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem('invite_role', data.role)
-            sessionStorage.setItem('invite_token', token)
+          // Fetch project name for display
+          if (data.project_id) {
+            // Use a public-friendly fetch that doesn't require auth
+            const p = JSON.parse(Buffer.from(token, 'base64url').toString('utf-8'))
+            setPayload(p)
           }
         } else if (data.error?.includes('expired')) {
           setStatus('expired')
@@ -47,9 +56,26 @@ function InvitePage() {
       .catch(() => setStatus('invalid'))
   }, [token])
 
+  // Once we have a session, fetch the project name for the valid state display
+  useEffect(() => {
+    if (!payload?.project_id) return
+    supabase.from('projects').select('name').eq('id', payload.project_id).single()
+      .then(({ data }) => { if (data) setProjectName(data.name) })
+  }, [payload?.project_id])
+
+  async function addToProject(userId: string, role: 'admin' | 'member', projectId: string) {
+    await supabase.from('project_members').upsert(
+      { project_id: projectId, user_id: userId, role },
+      { onConflict: 'project_id,user_id' }
+    )
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!payload) return
     setError(''); setSubmitting(true)
+
+    const { role, project_id } = payload
 
     if (mode === 'register') {
       const { data, error } = await supabase.auth.signUp({
@@ -59,24 +85,23 @@ function InvitePage() {
       if (error) {
         setError(error.message)
       } else if (data.session) {
-        // Update profile role
         await supabase.from('profiles').upsert({ id: data.session.user.id, name, role })
-        sessionStorage.removeItem('invite_role')
-        sessionStorage.removeItem('invite_token')
+        await addToProject(data.session.user.id, role, project_id)
         router.push('/dashboard')
         return
       } else {
-        setSuccess('Check your email to confirm your account, then sign in.')
+        setSuccess('Check your email to confirm your account, then sign in here.')
       }
     } else {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
         setError(error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message)
       } else if (data.session) {
-        // Update the role for this user from the invite
-        await supabase.from('profiles').update({ role }).eq('id', data.session.user.id)
-        sessionStorage.removeItem('invite_role')
-        sessionStorage.removeItem('invite_token')
+        // Update profile role if elevated to admin
+        if (role === 'admin') {
+          await supabase.from('profiles').update({ role }).eq('id', data.session.user.id)
+        }
+        await addToProject(data.session.user.id, role, project_id)
         router.push('/dashboard')
         return
       }
@@ -131,13 +156,18 @@ function InvitePage() {
             </div>
           </div>
           <h1 className="text-xl font-black text-white">You've been invited to Sethu</h1>
+          {projectName && (
+            <p className="text-white/70 text-sm mt-1">
+              Project: <span className="font-semibold text-white">{projectName}</span>
+            </p>
+          )}
           <p className="text-white/60 text-sm mt-1">
             You'll join as a{' '}
             <span className={clsx(
               'font-semibold px-1.5 py-0.5 rounded text-xs',
-              role === 'admin' ? 'bg-amber-400/30 text-yellow-200' : 'bg-white/20 text-white',
+              payload?.role === 'admin' ? 'bg-amber-400/30 text-yellow-200' : 'bg-white/20 text-white',
             )}>
-              {role}
+              {payload?.role ?? 'member'}
             </span>
           </p>
         </div>
@@ -203,7 +233,7 @@ function InvitePage() {
                   {mode === 'register' ? 'Creating account…' : 'Signing in…'}
                 </span>
               ) : (
-                mode === 'register' ? 'Accept invite & join' : 'Sign in & join workspace'
+                mode === 'register' ? 'Accept invite & join' : 'Sign in & join project'
               )}
             </button>
           </form>

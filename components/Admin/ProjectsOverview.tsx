@@ -61,6 +61,11 @@ function CreateProjectModal({ onClose, onCreated }: {
       .insert({ name: name.trim(), key: key || toKey(name), description: description.trim() || null, avatar_color: color, created_by: user.id })
       .select().single()
     if (err) { setError(err.message); setSaving(false); return }
+    // Auto-add creator as admin project member
+    await supabase.from('project_members').upsert(
+      { project_id: (data as any).id, user_id: user.id, role: 'admin' },
+      { onConflict: 'project_id,user_id' }
+    )
     onCreated(data as Project)
   }
 
@@ -212,10 +217,12 @@ export default function ProjectsOverview({ onOpenProject }: {
       supabase.from('bugs').select('project_id, status, priority').in('project_id', ids),
       supabase.from('features').select('project_id, status').in('project_id', ids),
       supabase.from('sprints').select('project_id, status, name').in('project_id', ids),
-    ]).then(([bugRes, featRes, sprintRes]) => {
+      supabase.from('project_members').select('project_id').in('project_id', ids),
+    ]).then(([bugRes, featRes, sprintRes, memberRes]) => {
       const bugs     = bugRes.data     ?? []
       const features = featRes.data    ?? []
       const sprints  = sprintRes.data  ?? []
+      const members  = memberRes.data  ?? []
 
       const computed: Record<string, ProjectStats> = {}
       for (const p of projects) {
@@ -224,12 +231,13 @@ export default function ProjectsOverview({ onOpenProject }: {
         const pFeatures = features.filter((f: any) => f.project_id === pid)
         const pSprints  = sprints.filter((s: any) => s.project_id === pid)
         const active    = pSprints.find((s: any) => s.status === 'active')
+        const pMembers  = members.filter((m: any) => m.project_id === pid)
         computed[pid] = {
           openBugs:    pBugs.filter((b: any) => b.status !== 'done').length,
           criticalBugs:pBugs.filter((b: any) => b.priority === 'critical' && b.status !== 'done').length,
           openFeatures:pFeatures.filter((f: any) => f.status !== 'done').length,
           activeSprint: active ? active.name : null,
-          memberCount: profiles.length,
+          memberCount: pMembers.length || profiles.length,
         }
       }
       setStats(computed)

@@ -82,29 +82,47 @@ export default function AppEntry() {
 
     setUserRole(profile.role)
 
-    // 3. Load projects
-    await checkProject(profile.role)
+    // 3. Load only projects this user is a member of
+    await checkProject(profile.role, userId)
   }
 
-  async function checkProject(role: 'admin' | 'member') {
-    const { data: allProjects, error } = await supabase
-      .from('projects')
-      .select('*')
+  async function checkProject(role: 'admin' | 'member', userId: string) {
+    // Try loading via project_members (project-scoped access)
+    const { data: memberships, error: pmError } = await supabase
+      .from('project_members')
+      .select('project_id, projects(*)')
+      .eq('user_id', userId)
       .order('created_at', { ascending: true })
 
-    if (error) {
-      console.warn('projects table not found — run the SQL migration:', error.message)
-      setAppMode('create-project')
+    // If project_members table doesn't exist yet, fall back to all projects (migration pending)
+    if (pmError && (pmError.code === 'PGRST116' || pmError.message?.includes('does not exist') || pmError.message?.includes('relation'))) {
+      console.warn('project_members table not found — falling back to all projects. Run /api/setup to migrate.')
+      const { data: allProjects, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: true })
+      if (error) { setAppMode('create-project'); return }
+      if (allProjects && allProjects.length > 0) {
+        setProjects(allProjects as Project[])
+        setProject(allProjects[0] as Project)
+        setAppMode(role === 'admin' ? 'admin' : 'user')
+      } else {
+        setAppMode('create-project')
+      }
       return
     }
 
-    if (allProjects && allProjects.length > 0) {
-      setProjects(allProjects as Project[])
-      setProject(allProjects[0] as Project)
-      // Admins start in admin panel; members go straight to project view
+    const myProjects = (memberships ?? [])
+      .map((m: any) => m.projects)
+      .filter(Boolean) as Project[]
+
+    if (myProjects.length > 0) {
+      setProjects(myProjects)
+      setProject(myProjects[0])
       setAppMode(role === 'admin' ? 'admin' : 'user')
     } else {
-      setAppMode('create-project')
+      // No projects yet — admin can create one, member sees empty state
+      setAppMode(role === 'admin' ? 'admin' : 'create-project')
     }
   }
 

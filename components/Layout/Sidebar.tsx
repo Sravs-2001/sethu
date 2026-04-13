@@ -45,6 +45,11 @@ function NewProjectModal({ onClose, onCreated }: {
       .insert({ name: name.trim(), key: key || toKey(name), description: description.trim() || null, avatar_color: color, created_by: user.id })
       .select().single()
     if (err) { setError(err.message); setSaving(false); return }
+    // Auto-add creator as admin project member
+    await supabase.from('project_members').upsert(
+      { project_id: (data as any).id, user_id: user.id, role: 'admin' },
+      { onConflict: 'project_id,user_id' }
+    )
     onCreated(data as Project)
   }
 
