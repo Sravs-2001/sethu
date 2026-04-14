@@ -1,7 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import type { Bug, Feature, Sprint, Channel, Message, Profile, Project, View } from '@/types'
+import type { Bug, Feature, Sprint, Channel, Message, Profile, Project, ProjectMember, View } from '@/types'
 
 interface AppState {
   user: Profile | null
@@ -37,6 +37,11 @@ interface AppState {
   profiles: Profile[]
   setProfiles: (profiles: Profile[]) => void
 
+  projectMembers: ProjectMember[]
+  setProjectMembers: (members: ProjectMember[]) => void
+  addProjectMember: (member: ProjectMember) => void
+  removeProjectMember: (id: string) => void
+
   channels: Channel[]
   setChannels: (channels: Channel[]) => void
   activeChannel: Channel | null
@@ -57,7 +62,7 @@ export const useStore = create<AppState>((set) => ({
   project: null,
   setProject: (project) => set({ project }),
 
-  activeView: 'team',
+  activeView: 'board',
   setActiveView: (activeView) => set({ activeView }),
 
   bugs: [],
@@ -82,6 +87,12 @@ export const useStore = create<AppState>((set) => ({
 
   profiles: [],
   setProfiles: (profiles) => set({ profiles }),
+
+  projectMembers: [],
+  setProjectMembers: (projectMembers) => set({ projectMembers }),
+  addProjectMember: (member) => set((s) => ({ projectMembers: [...s.projectMembers, member] })),
+  removeProjectMember: (id) =>
+    set((s) => ({ projectMembers: s.projectMembers.filter((m) => m.id !== id) })),
 
   channels: [],
   setChannels: (channels) => set({ channels }),

@@ -9,9 +9,9 @@ import AppLayout from './Layout/AppLayout'
 import AdminLayout from './Admin/AdminLayout'
 import CreateProject from './Project/CreateProject'
 import type { Profile, Project } from '@/types'
+import ArrowheadIcon from '@/components/ui/ArrowheadIcon'
 
-// admin → AdminLayout by default, member → UserLayout directly
-type AppMode = 'loading' | 'create-project' | 'admin' | 'user'
+type AppMode = 'loading' | 'create-project' | 'admin' | 'user' | 'no-access'
 
 export default function AppEntry() {
   const router       = useRouter()
@@ -52,7 +52,6 @@ export default function AppEntry() {
   async function loadProfile(authUser: User) {
     const userId = authUser.id
 
-    // 1. Try existing profile
     const { data: existing } = await supabase
       .from('profiles')
       .select('*')
@@ -64,11 +63,11 @@ export default function AppEntry() {
       profile = existing
       setUser(existing)
     } else {
-      // 2. Create new profile — direct signup always gets admin
       const meta       = authUser.user_metadata ?? {}
       const name       = meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User'
       const avatar_url = meta.avatar_url || meta.picture || null
-      const role: 'admin' | 'member' = (meta.role as 'admin' | 'member') || 'admin'
+      // New users default to 'member' — site admins must be set manually
+      const role: 'admin' | 'member' = (meta.role as 'admin' | 'member') || 'member'
 
       const { data: created } = await supabase
         .from('profiles')
@@ -81,41 +80,56 @@ export default function AppEntry() {
     }
 
     setUserRole(profile.role)
-
-    // 3. Load projects
-    await checkProject(profile.role)
+    await checkProject(profile)
   }
 
-  async function checkProject(role: 'admin' | 'member') {
-    const { data: allProjects, error } = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: true })
+  async function checkProject(profile: Profile) {
+    const { id: userId } = profile
 
-    if (error) {
-      console.warn('projects table not found — run the SQL migration:', error.message)
+    // 1. Projects where this user was EXPLICITLY invited
+    //    (invited_by IS NOT NULL — excludes cross-join seed entries which have invited_by = NULL)
+    const { data: memberships } = await supabase
+      .from('project_members')
+      .select('project_id')
+      .eq('user_id', userId)
+      .not('invited_by', 'is', null)
+    const memberIds = (memberships ?? []).map((m: any) => m.project_id)
+
+    // 2. Projects this user created (always visible regardless of project_members)
+    const { data: owned } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('created_by', userId)
+    const ownedIds = (owned ?? []).map((p: any) => p.id)
+
+    const projectIds = Array.from(new Set([...memberIds, ...ownedIds]))
+
+    if (projectIds.length === 0) {
       setAppMode('create-project')
       return
     }
 
-    if (allProjects && allProjects.length > 0) {
-      setProjects(allProjects as Project[])
-      setProject(allProjects[0] as Project)
-      // Admins start in admin panel; members go straight to project view
-      setAppMode(role === 'admin' ? 'admin' : 'user')
+    const { data: myProjects } = await supabase
+      .from('projects')
+      .select('*')
+      .in('id', projectIds)
+      .order('created_at', { ascending: true })
+
+    if (myProjects && myProjects.length > 0) {
+      setProjects(myProjects as Project[])
+      setProject(myProjects[0] as Project)
+      setAppMode('user')
     } else {
       setAppMode('create-project')
     }
   }
 
-  // Admin created the first project → jump to admin layout
   function handleProjectCreated(project: Project) {
     setProjects([project])
     setProject(project)
-    setAppMode(userRole === 'admin' ? 'admin' : 'user')
+    setAppMode('user')
   }
 
-  // Admin clicks "Open project" in the admin panel → enter user layout
   function handleEnterProject(project: Project) {
     setProject(project)
     setBugs([])
@@ -124,18 +138,48 @@ export default function AppEntry() {
     setAppMode('user')
   }
 
-  // Admin clicks "Back to Admin Panel" → return to admin layout
   function handleBackToAdmin() {
     setAppMode('admin')
+  }
+
+  function handleBackToProjects() {
+    setAppMode('user')
   }
 
   // ── Render ──────────────────────────────────────────────────────
   if (appMode === 'loading') {
     return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0A0E1A' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-[#0052CC] flex items-center justify-center shadow-lg shadow-blue-900/40">
+            <ArrowheadIcon className="w-6 h-6 text-white" />
+          </div>
+          <div className="w-5 h-5 rounded-full border-2 border-[#0052CC] border-t-transparent animate-spin" />
+          <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>Loading workspace…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (appMode === 'no-access') {
+    return (
       <div className="min-h-screen bg-[#F4F5F7] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 rounded-full border-2 border-[#0052CC] border-t-transparent animate-spin" />
-          <p className="text-sm text-[#5E6C84]">Loading…</p>
+        <div className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
+          <div className="w-16 h-16 rounded-2xl bg-white border border-[#DFE1E6] flex items-center justify-center shadow-sm">
+            <ArrowheadIcon className="w-8 h-8 text-[#0052CC]" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-[#172B4D] mb-1">No projects yet</h2>
+            <p className="text-sm text-[#5E6C84]">
+              You haven't been added to any projects. Ask your project admin to invite you using an invite link.
+            </p>
+          </div>
+          <button
+            onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
+            className="text-sm text-[#0052CC] hover:underline font-medium"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     )
@@ -146,11 +190,12 @@ export default function AppEntry() {
   }
 
   if (appMode === 'admin') {
-    return <AdminLayout onEnterProject={handleEnterProject} />
+    return <AdminLayout onEnterProject={handleEnterProject} onBackToProjects={handleBackToProjects} />
   }
 
-  // user mode — admins get a "back to admin" bar, members don't
   return (
-    <AppLayout onBackToAdmin={userRole === 'admin' ? handleBackToAdmin : undefined} />
+    <AppLayout
+      onGoToAdmin={userRole === 'admin' ? handleBackToAdmin : undefined}
+    />
   )
 }

@@ -77,6 +77,7 @@ export default function CreateProject({ onCreated }: { onCreated: (p: Project) =
     setSaving(true)
     setError('')
 
+    // Create project directly with Supabase client
     const { data, error: err } = await supabase
       .from('projects')
       .insert({
@@ -94,6 +95,14 @@ export default function CreateProject({ onCreated }: { onCreated: (p: Project) =
       setSaving(false)
       return
     }
+
+    // Try to add creator to project_members (silent — if RLS blocks it, checkProject
+    // will still find the project via created_by fallback)
+    await supabase.from('project_members').upsert(
+      { project_id: data.id, user_id: user!.id, role: 'admin', invited_by: null },
+      { onConflict: 'project_id,user_id' }
+    )
+
     onCreated(data as Project)
   }
 

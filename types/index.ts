@@ -1,7 +1,8 @@
-export type Priority = 'critical' | 'high' | 'medium' | 'low';
-export type Status = 'todo' | 'in_progress' | 'review' | 'done';
+export type Priority    = 'critical' | 'high' | 'medium' | 'low';
+export type Status      = 'todo' | 'in_progress' | 'review' | 'done';
 export type SprintStatus = 'planning' | 'active' | 'completed';
-export type View = 'team' | 'dashboard' | 'bugs' | 'features' | 'sprints' | 'chat';
+export type View        = 'board' | 'backlog' | 'bugs' | 'features' | 'chat' | 'team';
+export type IssueType   = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
 
 export interface Project {
   id: string;
@@ -13,9 +14,32 @@ export interface Project {
   created_at: string;
 }
 
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  role: 'admin' | 'member';
+  invited_by?: string;
+  created_at: string;
+  profile?: Profile;
+}
+
 export interface TeamInvite {
   email: string;
   role: 'admin' | 'member';
+  project_id?: string;
+}
+
+export interface InviteToken {
+  id: string;
+  token: string;
+  project_id: string;
+  role: 'admin' | 'member';
+  created_by: string;
+  uses: number;
+  max_uses?: number;
+  expires_at?: string;
+  created_at: string;
 }
 
 export interface Profile {
@@ -33,6 +57,7 @@ export interface Bug {
   description: string;
   priority: Priority;
   status: Status;
+  issue_type: IssueType;
   assignee_id?: string;
   assignee?: Profile;
   sprint_id?: string;

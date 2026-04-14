@@ -3,23 +3,14 @@
 import { useRef, useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
-import { useRouter } from 'next/navigation'
 import type { View, Project } from '@/types'
 import Modal from '@/components/ui/Modal'
 import {
-  Users, LayoutDashboard, Bug, Sparkles, Rocket, MessageSquare,
-  LogOut, ShieldCheck, ChevronDown, Plus, Check, Loader2, Zap,
+  LayoutGrid, Bug, Sparkles, MessageSquare, Users,
+  ChevronDown, Plus, Check, Loader2, Layers,
+  Settings, Shield,
 } from 'lucide-react'
 import clsx from 'clsx'
-
-const NAV: { icon: React.FC<{ className?: string }>; label: string; view: View }[] = [
-  { icon: LayoutDashboard, label: 'Dashboard', view: 'dashboard' },
-  { icon: Bug,             label: 'Bugs',      view: 'bugs'      },
-  { icon: Sparkles,        label: 'Features',  view: 'features'  },
-  { icon: Rocket,          label: 'Sprints',   view: 'sprints'   },
-  { icon: MessageSquare,   label: 'Chat',      view: 'chat'      },
-  { icon: Users,           label: 'Team',      view: 'team'      },
-]
 
 const AVATAR_COLORS = [
   '#0052CC','#6554C0','#00B8D9','#36B37E',
@@ -31,7 +22,6 @@ function toKey(name: string) {
     .split(/\s+/).map(w => w[0]).join('').slice(0,4) || 'PROJ'
 }
 
-// ── New Project Modal ──────────────────────────────────────────────
 function NewProjectModal({ onClose, onCreated }: {
   onClose: () => void
   onCreated: (p: Project) => void
@@ -50,23 +40,39 @@ function NewProjectModal({ onClose, onCreated }: {
     e.preventDefault()
     if (!name.trim() || !user) return
     setSaving(true); setError('')
+
     const { data, error: err } = await supabase.from('projects')
-      .insert({ name: name.trim(), key: key || toKey(name), description: description.trim() || null, avatar_color: color, created_by: user.id })
+      .insert({
+        name: name.trim(),
+        key: key || toKey(name),
+        description: description.trim() || null,
+        avatar_color: color,
+        created_by: user.id,
+      })
       .select().single()
+
     if (err) { setError(err.message); setSaving(false); return }
+
+    // Try to add creator to project_members (silent if RLS blocks — checkProject
+    // still finds the project via created_by query)
+    await supabase.from('project_members').upsert(
+      { project_id: data.id, user_id: user.id, role: 'admin', invited_by: null },
+      { onConflict: 'project_id,user_id' }
+    )
+
     onCreated(data as Project)
   }
 
   return (
-    <Modal title="New project" onClose={onClose} size="sm">
+    <Modal title="Create project" onClose={onClose} size="sm">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded flex items-center justify-center text-white text-base font-bold flex-shrink-0"
+          <div className="w-12 h-12 rounded-lg flex items-center justify-center text-white text-base font-bold flex-shrink-0"
             style={{ backgroundColor: color }}>
             {key || 'P'}
           </div>
           <div>
-            <p className="text-xs font-semibold mb-2" style={{ color: '#5E6C84' }}>Colour</p>
+            <p className="text-xs font-semibold mb-2" style={{ color: '#5E6C84' }}>Color</p>
             <div className="flex gap-1.5 flex-wrap">
               {AVATAR_COLORS.map(c => (
                 <button key={c} type="button" onClick={() => setColor(c)}
@@ -77,23 +83,35 @@ function NewProjectModal({ onClose, onCreated }: {
             </div>
           </div>
         </div>
+
         <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5E6C84' }}>Project name *</label>
-          <input className="input" value={name} onChange={e => handleNameChange(e.target.value)} placeholder="e.g. Mobile App" required autoFocus />
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5E6C84' }}>
+            Project name <span style={{color:'#DE350B'}}>*</span>
+          </label>
+          <input className="input" value={name} onChange={e => handleNameChange(e.target.value)}
+            placeholder="e.g. Mobile App" required autoFocus />
         </div>
+
         <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5E6C84' }}>Project key *</label>
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5E6C84' }}>
+            Project key <span style={{color:'#DE350B'}}>*</span>
+          </label>
           <input className="input" value={key}
             onChange={e => setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6))}
             placeholder="PROJ" required />
+          <p className="text-[11px] mt-1" style={{ color: '#7A869A' }}>Used to prefix issue keys (e.g. {key || 'PROJ'}-1)</p>
         </div>
+
         <div>
           <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5E6C84' }}>
             Description <span className="font-normal" style={{ color: '#97A0AF' }}>(optional)</span>
           </label>
-          <textarea className="input resize-none h-16" value={description} onChange={e => setDescription(e.target.value)} placeholder="What is this project about?" />
+          <textarea className="input resize-none h-16" value={description}
+            onChange={e => setDescription(e.target.value)} placeholder="What is this project about?" />
         </div>
+
         {error && <p className="text-xs px-3 py-2 rounded" style={{ color: '#DE350B', background: '#FFEBE6' }}>{error}</p>}
+
         <div className="flex gap-2 pt-1">
           <button type="button" onClick={onClose} className="flex-1 btn-secondary justify-center">Cancel</button>
           <button type="submit" disabled={saving || !name.trim()}
@@ -106,15 +124,21 @@ function NewProjectModal({ onClose, onCreated }: {
   )
 }
 
-// ── Sidebar ────────────────────────────────────────────────────────
-export default function Sidebar() {
-  const router = useRouter()
+interface SidebarProps {
+  onGoToAdmin?: () => void
+}
+
+type NavSection = {
+  label: string
+  items: { icon: React.FC<{ className?: string }>; label: string; view: View; badge?: number | null }[]
+}
+
+export default function Sidebar({ onGoToAdmin }: SidebarProps) {
   const {
     activeView, setActiveView, user, project, projects,
     setProject, addProject,
     bugs, features, sprints,
     setBugs, setFeatures, setSprints,
-    setUser,
   } = useStore()
 
   const [dropdownOpen, setDropdownOpen]     = useState(false)
@@ -125,14 +149,30 @@ export default function Sidebar() {
 
   const openBugs     = bugs.filter(b => b.status !== 'done').length
   const openFeatures = features.filter(f => f.status !== 'done').length
-  const activeSprint = sprints.find(s => s.status === 'active')
 
-  const badges: Record<View, number | null> = {
-    team: null, dashboard: null, chat: null,
-    bugs:     openBugs || null,
-    features: openFeatures || null,
-    sprints:  activeSprint ? 1 : null,
-  }
+  const sections: NavSection[] = [
+    {
+      label: 'Planning',
+      items: [
+        { icon: LayoutGrid, label: 'Board',   view: 'board' },
+        { icon: Layers,     label: 'Backlog', view: 'backlog' },
+      ],
+    },
+    {
+      label: 'Development',
+      items: [
+        { icon: Bug,      label: 'Issues',   view: 'bugs',     badge: openBugs     || null },
+        { icon: Sparkles, label: 'Features', view: 'features', badge: openFeatures || null },
+      ],
+    },
+    {
+      label: 'Collaborate',
+      items: [
+        { icon: MessageSquare, label: 'Chat',   view: 'chat' },
+        { icon: Users,         label: 'People', view: 'team' },
+      ],
+    },
+  ]
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -153,148 +193,119 @@ export default function Sidebar() {
     setShowNewProject(false)
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut(); setUser(null); router.push('/')
-  }
-
   return (
     <>
-      <aside className="w-[240px] flex-shrink-0 flex flex-col h-screen" style={{ background: '#172B4D' }}>
+      <aside className="w-[240px] flex-shrink-0 flex flex-col h-full bg-white border-r border-[#DFE1E6]">
 
-        {/* ── Brand ── */}
-        <div className="flex items-center gap-2.5 px-4 py-4">
-          <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0" style={{ background: '#0052CC' }}>
-            <Zap className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-white font-bold text-base tracking-tight">Sethu</span>
-        </div>
-
-        {/* ── Project switcher ── */}
-        <div className="px-3 mb-2" ref={dropdownRef}>
+        {/* ── Project Switcher — available to ALL users ── */}
+        <div className="px-3 pt-3 pb-2 relative" ref={dropdownRef}>
           <button
-            onClick={() => isAdmin && setDropdownOpen(o => !o)}
+            onClick={() => setDropdownOpen(o => !o)}
             className={clsx(
-              'flex items-center gap-2.5 w-full px-3 py-2.5 rounded transition-colors duration-150 text-left',
-              isAdmin ? 'cursor-pointer' : 'cursor-default',
+              'flex items-center gap-2.5 w-full px-2.5 py-2 rounded-md text-left transition-colors hover:bg-[#F1F2F4] cursor-pointer',
+              dropdownOpen && 'bg-[#F1F2F4]'
             )}
-            style={dropdownOpen ? { background: 'rgba(255,255,255,0.08)' } : {}}
-            onMouseEnter={e => isAdmin && ((e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)')}
-            onMouseLeave={e => !dropdownOpen && ((e.currentTarget as HTMLElement).style.background = '')}
           >
-            <div className="w-7 h-7 rounded flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
               style={{ backgroundColor: project?.avatar_color ?? '#0052CC' }}>
               {project?.key?.slice(0,2) ?? 'P'}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-white text-sm font-semibold truncate leading-tight">{project?.name ?? 'My Project'}</div>
-              <div className="text-xs leading-tight" style={{ color: 'rgba(255,255,255,0.4)' }}>Software project</div>
+              <div className="text-sm font-semibold text-[#172B4D] truncate leading-tight">{project?.name ?? 'My Project'}</div>
+              <div className="text-[11px] text-[#626F86] leading-tight">{project?.key ?? 'PROJ'} · Software project</div>
             </div>
-            {isAdmin && (
-              <ChevronDown className={clsx('w-3.5 h-3.5 flex-shrink-0 transition-transform duration-150', dropdownOpen && 'rotate-180')}
-                style={{ color: 'rgba(255,255,255,0.35)' }} />
-            )}
+            <ChevronDown className={clsx('w-3.5 h-3.5 flex-shrink-0 text-[#626F86] transition-transform duration-150', dropdownOpen && 'rotate-180')} />
           </button>
 
-          {/* Dropdown */}
           {dropdownOpen && (
-            <div className="mt-1 bg-white rounded overflow-hidden animate-slide-in"
-              style={{ border: '1px solid #DFE1E6', boxShadow: '0 4px 16px rgba(9,30,66,0.18)' }}>
+            <div className="absolute left-0 top-full mt-1 w-full bg-white rounded-lg overflow-hidden z-50"
+              style={{ border: '1px solid #DFE1E6', boxShadow: '0 8px 24px rgba(9,30,66,0.15)' }}>
               {projects.length > 0 && (
                 <>
                   <div className="px-3 pt-2.5 pb-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#7A869A' }}>Switch project</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#626F86]">Your projects</span>
                   </div>
-                  <div className="max-h-44 overflow-y-auto">
+                  <div className="max-h-48 overflow-y-auto">
                     {projects.map(p => (
                       <button key={p.id} onClick={() => switchProject(p)}
-                        className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors"
-                        style={{ color: '#172B4D' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F4F5F7'}
-                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
+                        className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors hover:bg-[#F1F2F4]">
                         <div className="w-6 h-6 rounded flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
                           style={{ backgroundColor: p.avatar_color }}>
                           {p.key.slice(0,2)}
                         </div>
-                        <span className="text-sm flex-1 truncate font-medium" style={{ color: '#172B4D' }}>{p.name}</span>
-                        {project?.id === p.id && <Check className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#0052CC' }} />}
+                        <span className="text-sm flex-1 truncate font-medium text-[#172B4D]">{p.name}</span>
+                        {project?.id === p.id && <Check className="w-3.5 h-3.5 flex-shrink-0 text-[#0052CC]" />}
                       </button>
                     ))}
                   </div>
-                  <div className="h-px mx-3" style={{ background: '#DFE1E6' }} />
+                  <div className="h-px mx-3 bg-[#DFE1E6]" />
                 </>
               )}
               <button
                 onClick={() => { setDropdownOpen(false); setShowNewProject(true) }}
-                className="flex items-center gap-2 w-full px-3 py-2.5 text-sm font-semibold transition-colors"
-                style={{ color: '#0052CC' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F4F5F7'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
+                className="flex items-center gap-2 w-full px-3 py-2.5 text-sm font-semibold text-[#0052CC] hover:bg-[#F1F2F4] transition-colors">
                 <Plus className="w-3.5 h-3.5" />
-                New project
+                Create new project
               </button>
             </div>
           )}
         </div>
 
-        {/* ── Nav ── */}
-        <div className="px-3 mb-1">
-          <span className="text-[10px] font-semibold uppercase tracking-widest pl-3" style={{ color: 'rgba(255,255,255,0.25)' }}>Workspace</span>
-        </div>
-        <nav className="flex-1 flex flex-col gap-0.5 px-3 overflow-y-auto">
-          {NAV.map(({ icon: Icon, label, view }) => {
-            const active = activeView === view
-            const badge  = badges[view]
-            return (
-              <button key={view} onClick={() => setActiveView(view)}
-                className={clsx('nav-item', active ? 'nav-item-active' : 'nav-item-inactive')}>
-                {active && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full" style={{ background: '#4C9AFF' }} />
-                )}
-                <Icon className="w-4 h-4 flex-shrink-0" />
-                <span className="flex-1 truncate">{label}</span>
-                {badge && (
-                  <span className="ml-auto min-w-[18px] h-[18px] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1"
-                    style={{ background: '#DE350B' }}>
-                    {badge > 99 ? '99+' : badge}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+        <div className="h-px mx-4 bg-[#DFE1E6] mb-2" />
+
+        {/* ── Navigation ── */}
+        <nav className="flex-1 overflow-y-auto px-2 space-y-4 py-1">
+          {sections.map(section => (
+            <div key={section.label}>
+              <div className="px-3 mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#626F86]">{section.label}</span>
+              </div>
+              <div className="space-y-0.5">
+                {section.items.map(({ icon: Icon, label, view, badge }) => {
+                  const active = activeView === view
+                  return (
+                    <button key={view} onClick={() => setActiveView(view)}
+                      className={clsx(
+                        'relative flex items-center gap-2.5 w-full px-3 py-1.5 rounded-md text-sm transition-colors text-left',
+                        active
+                          ? 'bg-[#E8EDFF] text-[#0052CC] font-semibold'
+                          : 'text-[#44546F] hover:bg-[#F1F2F4] font-medium'
+                      )}>
+                      {active && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-[#0052CC]" />
+                      )}
+                      <Icon className={clsx('w-4 h-4 flex-shrink-0', active ? 'text-[#0052CC]' : 'text-[#626F86]')} />
+                      <span className="flex-1 truncate">{label}</span>
+                      {badge != null && (
+                        <span className={clsx(
+                          'min-w-[18px] h-[18px] text-[10px] font-bold rounded-full flex items-center justify-center px-1',
+                          active ? 'bg-[#0052CC] text-white' : 'bg-[#DFE1E6] text-[#44546F]'
+                        )}>
+                          {badge > 99 ? '99+' : badge}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
-        {/* ── User ── */}
-        <div className="px-3 py-3">
-          <div className="flex items-center gap-2.5 px-2 py-2 rounded transition-colors group"
-            style={{}}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-            <div className="relative flex-shrink-0">
-              {user?.avatar_url ? (
-                <img src={user.avatar_url} alt={user.name} className="w-7 h-7 rounded-full object-cover" style={{ outline: '1px solid rgba(255,255,255,0.15)' }} />
-              ) : (
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: '#0052CC' }}>
-                  {user?.name?.[0]?.toUpperCase() ?? '?'}
-                </div>
-              )}
-              {user?.role === 'admin' && (
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-400 rounded-full flex items-center justify-center">
-                  <ShieldCheck className="w-1.5 h-1.5 text-amber-900" />
-                </span>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-white text-xs font-semibold truncate leading-tight">{user?.name ?? 'User'}</div>
-              <div className="text-[10px] capitalize leading-tight" style={{ color: 'rgba(255,255,255,0.35)' }}>{user?.role ?? 'member'}</div>
-            </div>
-            <button onClick={handleLogout} title="Sign out"
-              className="flex-shrink-0 p-1 rounded transition-colors opacity-0 group-hover:opacity-100"
-              style={{ color: 'rgba(255,255,255,0.3)' }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.3)'}>
-              <LogOut className="w-3.5 h-3.5" />
+        {/* ── Bottom actions ── */}
+        <div className="p-2 border-t border-[#DFE1E6] space-y-0.5">
+          {isAdmin && onGoToAdmin && (
+            <button onClick={onGoToAdmin}
+              className="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-sm font-medium text-[#626F86] hover:bg-[#F1F2F4] transition-colors">
+              <Shield className="w-4 h-4 text-amber-500" />
+              <span>Admin panel</span>
             </button>
-          </div>
+          )}
+          <button
+            className="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-sm font-medium text-[#626F86] hover:bg-[#F1F2F4] transition-colors">
+            <Settings className="w-4 h-4" />
+            <span>Project settings</span>
+          </button>
         </div>
       </aside>
 

@@ -56,7 +56,7 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
       if (error) {
         setError(error.message)
       } else if (data.session) {
-        onClose()
+        window.location.href = '/dashboard'
       } else {
         setSuccess('Check your email to confirm your account, then sign in.')
       }
@@ -65,7 +65,7 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
       if (error) {
         setError(error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message)
       } else if (data.session) {
-        onClose()
+        window.location.href = '/dashboard'
       }
     }
     setLoading(null)
