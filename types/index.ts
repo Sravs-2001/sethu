@@ -1,7 +1,7 @@
 export type Priority    = 'critical' | 'high' | 'medium' | 'low';
 export type Status      = 'todo' | 'in_progress' | 'review' | 'done';
 export type SprintStatus = 'planning' | 'active' | 'completed';
-export type View        = 'board' | 'backlog' | 'bugs' | 'features' | 'chat' | 'team';
+export type View        = 'board' | 'backlog' | 'bugs' | 'features' | 'chat' | 'team' | 'projects' | 'reports' | 'settings';
 export type IssueType   = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
 
 export interface Project {

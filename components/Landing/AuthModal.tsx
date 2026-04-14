@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { X, Eye, EyeOff, CheckCircle, Bug, Rocket, MessageSquare, Sparkles } from 'lucide-react'
-import ArrowheadIcon from '@/components/ui/ArrowheadIcon'
+import JiraLogo from '@/components/ui/JiraLogo'
 import { GoogleIcon, GitHubIcon, MicrosoftIcon } from '@/components/ui/OAuthIcons'
 import clsx from 'clsx'
 
@@ -102,21 +102,19 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(6, 13, 31, 0.85)', backdropFilter: 'blur(10px)' }}
+      style={{ background: 'rgba(9,30,66,0.72)', backdropFilter: 'blur(8px)' }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-3xl rounded-3xl shadow-2xl animate-slide-in overflow-hidden flex min-h-[540px]">
+      <div className="w-full max-w-3xl rounded-xl shadow-2xl animate-slide-in overflow-hidden flex min-h-[520px]"
+        style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
 
-        {/* Left: branded dark panel */}
-        <div className="hidden md:flex flex-col w-72 flex-shrink-0 p-8 relative overflow-hidden"
-          style={{ background: 'linear-gradient(160deg, #060d1f 0%, #0a1628 50%, #0d1f3c 100%)' }}>
-          <div className="dot-grid absolute inset-0 opacity-50 pointer-events-none" />
+        {/* Left: branded dark panel — matches app nav color #1D2125 */}
+        <div className="hidden md:flex flex-col w-64 flex-shrink-0 p-7 relative overflow-hidden"
+          style={{ background: '#1D2125', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="relative z-10 flex flex-col h-full">
             <div className="flex items-center gap-2.5 mb-8">
-              <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                <ArrowheadIcon className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-white text-xl font-black">sethu</span>
+              <JiraLogo size={32} />
+              <span className="text-white text-lg font-black">sethu</span>
             </div>
             <h2 className="text-white text-2xl font-black leading-tight mb-2">
               Everything your<br />team needs.
@@ -124,21 +122,23 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
             <p className="text-white/40 text-sm mb-8 leading-relaxed">
               One workspace for bugs, features, sprints, and team chat.
             </p>
-            <div className="space-y-3 mb-8">
+            <div className="space-y-2.5 mb-8">
               {APP_FEATURES.map(({ icon: Icon, color, label }) => (
                 <div key={label} className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-white/8 border border-white/10 flex items-center justify-center flex-shrink-0">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
                     <Icon className={`w-3.5 h-3.5 ${color}`} />
                   </div>
-                  <span className="text-white/60 text-sm">{label}</span>
+                  <span className="text-sm" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</span>
                 </div>
               ))}
             </div>
-            <div className="mt-auto grid grid-cols-2 gap-2.5">
-              {[['10k+', 'Bugs resolved'], ['500+', 'Teams']].map(([n, l]) => (
-                <div key={l} className="bg-white/6 border border-white/10 rounded-2xl p-3.5">
-                  <div className="text-white font-black text-xl">{n}</div>
-                  <div className="text-white/35 text-xs mt-0.5">{l}</div>
+            <div className="mt-auto grid grid-cols-2 gap-2">
+              {[['10k+', 'Issues tracked'], ['500+', 'Teams']].map(([n, l]) => (
+                <div key={l} className="rounded-lg p-3"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div className="text-white font-black text-lg">{n}</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>{l}</div>
                 </div>
               ))}
             </div>
@@ -147,15 +147,15 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
 
         {/* Right: form panel */}
         <div className="flex-1 bg-white flex flex-col">
-          <div className="flex border-b border-gray-100 relative">
+          <div className="flex border-b border-[#DFE1E6] relative">
             <button onClick={onClose}
-              className="absolute top-3 right-3 w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors">
+              className="absolute top-3 right-3 w-7 h-7 rounded-full hover:bg-[#F4F5F7] flex items-center justify-center text-[#7A869A] transition-colors">
               <X className="w-3.5 h-3.5" />
             </button>
             {(['login', 'register'] as Mode[]).map((m) => (
               <button key={m} onClick={() => switchMode(m)}
-                className={clsx('flex-1 py-4 text-sm font-bold transition-all border-b-2',
-                  mode === m ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-400 hover:text-gray-700')}>
+                className={clsx('flex-1 py-3.5 text-sm font-bold transition-all border-b-2',
+                  mode === m ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#626F86] hover:text-[#172B4D]')}>
                 {m === 'login' ? 'Sign In' : 'Create Account'}
               </button>
             ))}
@@ -163,8 +163,8 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
 
           <div className="flex-1 px-7 py-6 overflow-y-auto">
             {mode === 'register' && (
-              <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3 mb-5 text-sm text-blue-700">
-                <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
+              <div className="flex items-start gap-2 bg-[#DEEBFF] border border-[#B3D4FF] rounded-lg px-3.5 py-3 mb-5 text-sm text-[#0052CC]">
+                <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#0052CC]" />
                 <span>First person to register becomes the <strong>Admin</strong> — set up your workspace.</span>
               </div>
             )}
@@ -176,10 +176,10 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
                 { id: 'azure'  as const, Icon: MicrosoftIcon, label: 'Microsoft' },
               ].map(({ id, Icon, label }) => (
                 <button key={id} onClick={() => handleOAuth(id)} disabled={!!loading} title={`Continue with ${label}`}
-                  className={clsx('flex flex-col items-center gap-1.5 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-[11px] font-semibold text-gray-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-all active:scale-95',
+                  className={clsx('flex flex-col items-center gap-1.5 py-3 bg-[#F4F5F7] border border-[#DFE1E6] rounded-lg text-[11px] font-semibold text-[#42526E] hover:bg-[#DEEBFF] hover:border-[#4C9AFF] hover:text-[#0052CC] transition-all active:scale-95',
                     loading && loading !== id && 'opacity-40 pointer-events-none')}>
                   {loading === id
-                    ? <span className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                    ? <span className="w-5 h-5 border-2 border-[#0052CC] border-t-transparent rounded-full animate-spin" />
                     : <Icon className="w-5 h-5" />}
                   {label}
                 </button>
@@ -187,30 +187,30 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
             </div>
 
             <div className="flex items-center gap-3 mb-5">
-              <div className="flex-1 h-px bg-gray-100" />
-              <span className="text-xs text-gray-400 font-medium">or with email</span>
-              <div className="flex-1 h-px bg-gray-100" />
+              <div className="flex-1 h-px bg-[#DFE1E6]" />
+              <span className="text-xs text-[#97A0AF] font-medium">or with email</span>
+              <div className="flex-1 h-px bg-[#DFE1E6]" />
             </div>
 
             <form onSubmit={handleEmail} className="space-y-3.5">
               {mode === 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Full Name</label>
+                  <label className="block text-xs font-semibold text-[#5E6C84] mb-1.5">Full Name</label>
                   <input className="input" type="text" placeholder="John Doe" value={name}
                     onChange={(e) => setName(e.target.value)} required autoFocus />
                 </div>
               )}
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Email</label>
+                <label className="block text-xs font-semibold text-[#5E6C84] mb-1.5">Email</label>
                 <input className="input" type="email" placeholder="you@company.com" value={email}
                   onChange={(e) => setEmail(e.target.value)} required autoFocus={mode === 'login'} />
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Password</label>
+                  <label className="block text-xs font-semibold text-[#5E6C84]">Password</label>
                   {mode === 'login' && (
                     <button type="button" onClick={handleMagicLink} disabled={!!loading}
-                      className="text-xs text-blue-600 font-semibold hover:underline">
+                      className="text-xs text-[#0052CC] font-semibold hover:underline">
                       {loading === 'magic' ? 'Sending…' : 'Forgot password?'}
                     </button>
                   )}
@@ -227,18 +227,21 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 bg-red-50 border border-red-100 text-red-600 px-3.5 py-3 rounded-xl text-sm">
+                <div className="flex items-start gap-2 bg-[#FFEBE6] border border-[#FFBDAD] text-[#DE350B] px-3.5 py-3 rounded-lg text-sm">
                   <span>⚠️</span><span>{error}</span>
                 </div>
               )}
               {success && (
-                <div className="flex items-start gap-2 bg-green-50 border border-green-100 text-green-700 px-3.5 py-3 rounded-xl text-sm">
+                <div className="flex items-start gap-2 bg-[#E3FCEF] border border-[#ABF5D1] text-[#006644] px-3.5 py-3 rounded-lg text-sm">
                   <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /><span>{success}</span>
                 </div>
               )}
 
               <button type="submit" disabled={!!loading}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-sm hover:shadow-md transition-all active:scale-[0.98] text-sm">
+                className="w-full py-2.5 text-white font-bold rounded-lg shadow-sm transition-all active:scale-[0.98] text-sm disabled:opacity-60"
+                style={{ background: '#0052CC' }}
+                onMouseEnter={e => !(e.currentTarget as HTMLButtonElement).disabled && ((e.currentTarget as HTMLElement).style.background = '#0065FF')}
+                onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#0052CC')}>
                 {loading === 'email' ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -250,10 +253,10 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
               </button>
             </form>
 
-            <p className="text-center text-sm text-gray-500 mt-4">
+            <p className="text-center text-sm text-[#5E6C84] mt-4">
               {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
               <button onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-                className="text-blue-600 font-bold hover:underline">
+                className="text-[#0052CC] font-bold hover:underline">
                 {mode === 'login' ? 'Sign up free' : 'Sign in'}
               </button>
             </p>

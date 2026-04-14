@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
 import {
   Users, Shield, User, UserPlus, Mail, X, CheckCircle,
-  Loader2, Link2, Copy, Check,
+  Loader2, Link2, Copy, Check, Lock, Zap,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { formatDistanceToNow } from 'date-fns'
@@ -55,6 +55,17 @@ export default function TeamView() {
             <UserPlus className="w-4 h-4" /> Invite people
           </button>
         )}
+      </div>
+
+      {/* Privacy notice */}
+      <div className="flex items-start gap-3 bg-[#DEEBFF] border border-[#B3D4FF] rounded-lg px-4 py-3">
+        <Lock className="w-4 h-4 text-[#0052CC] mt-0.5 flex-shrink-0" />
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-[#0052CC]">This project is private</p>
+          <p className="text-xs text-[#0065FF] mt-0.5">
+            Only people listed below have access. No one outside this list can view, search or join without an explicit invite from a project admin.
+          </p>
+        </div>
       </div>
 
       {loading ? (
@@ -316,14 +327,28 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
               {tab === 'email' && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-[#5E6C84] mb-1.5">Email addresses</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-[#5E6C84]">Email addresses</label>
+                      {/* Mailinator quick-fill for testing */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const rand = Math.random().toString(36).slice(2, 8)
+                          const addr = `testmember-${rand}@mailinator.com`
+                          setEmailInput(addr)
+                        }}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-[#6554C0] hover:bg-[#EAE6FF] px-2 py-0.5 rounded transition-colors">
+                        <Zap className="w-3 h-3" />
+                        Quick test (Mailinator)
+                      </button>
+                    </div>
                     <div className="flex gap-2">
                       <div className="flex-1 flex items-center gap-2 bg-white border border-[#DFE1E6] rounded-lg px-2.5 focus-within:border-[#4C9AFF] focus-within:ring-2 focus-within:ring-[#4C9AFF]/20 transition-all">
                         <Mail className="w-3.5 h-3.5 text-[#B3BAC5]" />
                         <input type="text" value={emailInput}
                           onChange={e => setEmailInput(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addEmail(emailInput) } }}
-                          placeholder="name@company.com" autoFocus
+                          placeholder="name@mailinator.com or any email" autoFocus
                           className="flex-1 py-2 text-sm bg-transparent outline-none text-[#172B4D] placeholder-[#B3BAC5]" />
                       </div>
                       <button onClick={() => addEmail(emailInput)} className="btn-primary flex-shrink-0">Add</button>
@@ -332,6 +357,7 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {emails.map(email => (
                           <span key={email} className="flex items-center gap-1 bg-[#DEEBFF] text-[#0052CC] text-xs font-medium px-2 py-1 rounded-lg">
+                            {email.includes('mailinator') && <Zap className="w-2.5 h-2.5 text-[#6554C0]" />}
                             {email}
                             <button onClick={() => setEmails(prev => prev.filter(x => x !== email))}
                               className="hover:text-[#DE350B] transition-colors">
@@ -341,6 +367,9 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
                         ))}
                       </div>
                     )}
+                    <p className="text-[11px] text-[#97A0AF] mt-1.5">
+                      Tip: use <span className="font-mono text-[#6554C0]">@mailinator.com</span> addresses for testing — inbox is public at mailinator.com.
+                    </p>
                   </div>
 
                   <div>

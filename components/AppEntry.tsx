@@ -9,7 +9,7 @@ import AppLayout from './Layout/AppLayout'
 import AdminLayout from './Admin/AdminLayout'
 import CreateProject from './Project/CreateProject'
 import type { Profile, Project } from '@/types'
-import ArrowheadIcon from '@/components/ui/ArrowheadIcon'
+import JiraLogo from '@/components/ui/JiraLogo'
 
 type AppMode = 'loading' | 'create-project' | 'admin' | 'user' | 'no-access'
 
@@ -51,34 +51,36 @@ export default function AppEntry() {
 
   async function loadProfile(authUser: User) {
     const userId = authUser.id
+    const meta   = authUser.user_metadata ?? {}
 
-    const { data: existing } = await supabase
+    // Single upsert: creates on first login, returns existing on subsequent logins
+    // onConflict keeps the existing row (preserves any manual role changes)
+    const { data: profile } = await supabase
       .from('profiles')
-      .select('*')
-      .eq('id', userId)
+      .upsert(
+        {
+          id:         userId,
+          name:       meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User',
+          avatar_url: meta.avatar_url || meta.picture || null,
+          role:       (meta.role as 'admin' | 'member') || 'member',
+        },
+        { onConflict: 'id', ignoreDuplicates: true }
+      )
+      .select()
       .single()
 
-    let profile: Profile
-    if (existing) {
-      profile = existing
-      setUser(existing)
-    } else {
-      const meta       = authUser.user_metadata ?? {}
-      const name       = meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User'
-      const avatar_url = meta.avatar_url || meta.picture || null
-      // New users default to 'member' — site admins must be set manually
-      const role: 'admin' | 'member' = (meta.role as 'admin' | 'member') || 'member'
-
-      const { data: created } = await supabase
-        .from('profiles')
-        .upsert({ id: userId, name, avatar_url, role })
-        .select()
-        .single()
-
-      profile = created ?? { id: userId, name, avatar_url, role, created_at: new Date().toISOString() }
-      setUser(profile)
+    if (!profile) {
+      // Fallback: fetch existing profile if upsert returned nothing
+      const { data: existing } = await supabase.from('profiles').select('*').eq('id', userId).single()
+      if (existing) {
+        setUser(existing)
+        setUserRole(existing.role)
+        await checkProject(existing)
+      }
+      return
     }
 
+    setUser(profile)
     setUserRole(profile.role)
     await checkProject(profile)
   }
@@ -86,21 +88,22 @@ export default function AppEntry() {
   async function checkProject(profile: Profile) {
     const { id: userId } = profile
 
-    // 1. Projects where this user was EXPLICITLY invited
-    //    (invited_by IS NOT NULL — excludes cross-join seed entries which have invited_by = NULL)
-    const { data: memberships } = await supabase
-      .from('project_members')
-      .select('project_id')
-      .eq('user_id', userId)
-      .not('invited_by', 'is', null)
-    const memberIds = (memberships ?? []).map((m: any) => m.project_id)
+    // Run both queries in parallel to avoid sequential round trips
+    const [{ data: memberships }, { data: owned }] = await Promise.all([
+      // 1. Projects where this user was EXPLICITLY invited
+      supabase
+        .from('project_members')
+        .select('project_id')
+        .eq('user_id', userId),
+      // 2. Projects this user created (always visible)
+      supabase
+        .from('projects')
+        .select('id')
+        .eq('created_by', userId),
+    ])
 
-    // 2. Projects this user created (always visible regardless of project_members)
-    const { data: owned } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('created_by', userId)
-    const ownedIds = (owned ?? []).map((p: any) => p.id)
+    const memberIds = (memberships ?? []).map((m: any) => m.project_id)
+    const ownedIds  = (owned ?? []).map((p: any) => p.id)
 
     const projectIds = Array.from(new Set([...memberIds, ...ownedIds]))
 
@@ -149,12 +152,13 @@ export default function AppEntry() {
   // ── Render ──────────────────────────────────────────────────────
   if (appMode === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0A0E1A' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#1D2125' }}>
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-[#0052CC] flex items-center justify-center shadow-lg shadow-blue-900/40">
-            <ArrowheadIcon className="w-6 h-6 text-white" />
+          <JiraLogo size={48} />
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-white font-black text-xl tracking-tight">sethu</span>
           </div>
-          <div className="w-5 h-5 rounded-full border-2 border-[#0052CC] border-t-transparent animate-spin" />
+          <div className="w-5 h-5 rounded-full border-2 border-[#2684FF] border-t-transparent animate-spin mt-2" />
           <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>Loading workspace…</p>
         </div>
       </div>
@@ -166,7 +170,7 @@ export default function AppEntry() {
       <div className="min-h-screen bg-[#F4F5F7] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
           <div className="w-16 h-16 rounded-2xl bg-white border border-[#DFE1E6] flex items-center justify-center shadow-sm">
-            <ArrowheadIcon className="w-8 h-8 text-[#0052CC]" />
+            <JiraLogo size={36} />
           </div>
           <div>
             <h2 className="text-lg font-bold text-[#172B4D] mb-1">No projects yet</h2>
