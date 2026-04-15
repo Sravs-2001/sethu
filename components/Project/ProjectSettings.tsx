@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
 import { Settings, Lock, Trash2, Loader2, Check, Shield, Users } from 'lucide-react'
@@ -12,7 +13,8 @@ const AVATAR_COLORS = [
 ]
 
 export default function ProjectSettings() {
-  const { project, setProject, projects, setProjects, user, setActiveView, projectMembers } = useStore()
+  const { project, setProject, projects, setProjects, user, projectMembers } = useStore()
+  const router = useRouter()
 
   const [name,        setName]        = useState(project?.name ?? '')
   const [description, setDescription] = useState(project?.description ?? '')
@@ -73,10 +75,10 @@ export default function ProjectSettings() {
     setProjects(remaining)
     if (remaining.length > 0) {
       setProject(remaining[0])
-      setActiveView('board')
+      router.push('/dashboard/board')
     } else {
       setProject(null as any)
-      setActiveView('projects')
+      router.push('/dashboard/projects')
     }
     setDeleting(false)
   }
@@ -176,7 +178,7 @@ export default function ProjectSettings() {
         style={{ boxShadow: '0 1px 2px rgba(9,30,66,0.08)' }}>
         <div className="px-5 py-4 border-b border-[#DFE1E6] bg-[#F8F9FC] flex items-center justify-between">
           <h3 className="text-sm font-bold text-[#172B4D]">Members</h3>
-          <button onClick={() => setActiveView('team')}
+          <button onClick={() => router.push('/dashboard/people')}
             className="text-xs text-[#0052CC] hover:underline font-medium flex items-center gap-1">
             <Users className="w-3 h-3" />
             Manage members

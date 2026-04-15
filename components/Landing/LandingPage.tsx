@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   LayoutGrid, Bug, Sparkles, MessageSquare, Users,
   ArrowRight, Rocket, BarChart2, Lock,
@@ -103,6 +104,13 @@ const FEATURES = [
 
 export default function LandingPage() {
   const [authMode, setAuthMode] = useState<AuthMode | null>(null)
+  const searchParams = useSearchParams()
+  const inviteToken  = searchParams.get('invite_token') ?? undefined
+
+  // Auto-open register modal when arriving via an invite link
+  useEffect(() => {
+    if (inviteToken) setAuthMode('register')
+  }, [inviteToken])
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#F4F5F7' }}>
@@ -389,7 +397,13 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {authMode && <AuthModal defaultMode={authMode} onClose={() => setAuthMode(null)} />}
+      {authMode && (
+        <AuthModal
+          defaultMode={authMode}
+          inviteToken={inviteToken}
+          onClose={() => setAuthMode(null)}
+        />
+      )}
     </div>
   )
 }

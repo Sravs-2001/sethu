@@ -7,11 +7,10 @@ import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
 import AppLayout from './Layout/AppLayout'
 import AdminLayout from './Admin/AdminLayout'
-import CreateProject from './Project/CreateProject'
 import type { Profile, Project } from '@/types'
 import JiraLogo from '@/components/ui/JiraLogo'
 
-type AppMode = 'loading' | 'create-project' | 'admin' | 'user' | 'no-access'
+type AppMode = 'loading' | 'admin' | 'user' | 'no-access'
 
 export default function AppEntry() {
   const router       = useRouter()
@@ -26,13 +25,13 @@ export default function AppEntry() {
   const [userRole, setUserRole] = useState<'admin' | 'member'>('member')
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) loadProfile(session.user)
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) loadProfile(user)
       else router.push('/')
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session?.user) router.push('/')
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, _session) => {
+      if (event === 'SIGNED_OUT') router.push('/')
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -48,6 +47,17 @@ export default function AppEntry() {
       router.replace('/dashboard')
     }
   }, [channels, searchParams])
+
+  async function redeemPendingInvite() {
+    const token = localStorage.getItem('pending_invite_token')
+    if (!token) return
+    localStorage.removeItem('pending_invite_token')
+    await fetch('/api/invite/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+  }
 
   async function loadProfile(authUser: User) {
     const userId = authUser.id
@@ -75,13 +85,26 @@ export default function AppEntry() {
       if (existing) {
         setUser(existing)
         setUserRole(existing.role)
+        await redeemPendingInvite()
         await checkProject(existing)
+      } else {
+        // Still no profile — use minimal info from auth so the app doesn't hang on loading
+        const fallback = {
+          id:         userId,
+          name:       meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User',
+          avatar_url: null,
+          role:       'member' as const,
+        }
+        setUser(fallback as any)
+        await redeemPendingInvite()
+        await checkProject(fallback as any)
       }
       return
     }
 
     setUser(profile)
     setUserRole(profile.role)
+    await redeemPendingInvite()
     await checkProject(profile)
   }
 
@@ -108,7 +131,9 @@ export default function AppEntry() {
     const projectIds = Array.from(new Set([...memberIds, ...ownedIds]))
 
     if (projectIds.length === 0) {
-      setAppMode('create-project')
+      setProjects([])
+      setActiveView('projects')
+      setAppMode('user')
       return
     }
 
@@ -123,14 +148,10 @@ export default function AppEntry() {
       setProject(myProjects[0] as Project)
       setAppMode('user')
     } else {
-      setAppMode('create-project')
+      setProjects([])
+      setActiveView('projects')
+      setAppMode('user')
     }
-  }
-
-  function handleProjectCreated(project: Project) {
-    setProjects([project])
-    setProject(project)
-    setAppMode('user')
   }
 
   function handleEnterProject(project: Project) {
@@ -189,17 +210,16 @@ export default function AppEntry() {
     )
   }
 
-  if (appMode === 'create-project') {
-    return <CreateProject onCreated={handleProjectCreated} />
-  }
-
   if (appMode === 'admin') {
     return <AdminLayout onEnterProject={handleEnterProject} onBackToProjects={handleBackToProjects} />
   }
 
   return (
     <AppLayout
+      onSignOut={async () => { await supabase.auth.signOut(); router.push('/') }}
       onGoToAdmin={userRole === 'admin' ? handleBackToAdmin : undefined}
-    />
+    >
+      <div />
+    </AppLayout>
   )
 }

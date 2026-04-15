@@ -3,44 +3,25 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
-import Dashboard from '@/components/Dashboard/Dashboard'
-import BugBoard from '@/components/Bugs/BugBoard'
-import FeatureList from '@/components/Features/FeatureList'
-import SprintBoard from '@/components/Sprint/SprintBoard'
-import ChatPanel from '@/components/Chat/ChatPanel'
-import TeamView from '@/components/Team/TeamView'
-import ProjectsPage from '@/components/Project/ProjectsPage'
-import ProjectSettings from '@/components/Project/ProjectSettings'
-import Reports from '@/components/Dashboard/Reports'
 import JiraLogo from '@/components/ui/JiraLogo'
-import type { View, Project } from '@/types'
+import type { Project } from '@/types'
 import {
   Bell, HelpCircle, ChevronDown, LogOut, Shield,
-  Search, Plus, X, Settings, Check, Loader2,
+  Search, Plus, X, Settings, Check,
   LayoutGrid, ChevronRight,
 } from 'lucide-react'
 import clsx from 'clsx'
 
-const AVATAR_COLORS = [
-  '#0052CC','#6554C0','#00B8D9','#36B37E',
-  '#FF5630','#FF991F','#172B4D','#403294',
-]
-
-function toKey(name: string) {
-  return name.toUpperCase().replace(/[^A-Z0-9\s]/g,'').trim()
-    .split(/\s+/).map(w => w[0]).join('').slice(0,4) || 'PROJ'
-}
-
 // ── Quick Create Modal ──────────────────────────────────────────────
 function GlobalCreateModal({ onClose }: { onClose: () => void }) {
-  const { setActiveView } = useStore()
+  const router = useRouter()
   const options = [
-    { label: 'Issue',   icon: '🐛', desc: 'Bug, task, story or epic', view: 'bugs'    as View },
-    { label: 'Feature', icon: '✨', desc: 'New feature request',      view: 'features' as View },
-    { label: 'Sprint',  icon: '🚀', desc: 'Sprint planning board',    view: 'backlog'  as View },
-    { label: 'Project', icon: '📁', desc: 'New software project',     view: 'projects' as View },
+    { label: 'Issue',   icon: '🐛', desc: 'Bug, task, story or epic', href: '/dashboard/board'    },
+    { label: 'Feature', icon: '✨', desc: 'New feature request',      href: '/dashboard/features' },
+    { label: 'Sprint',  icon: '🚀', desc: 'Sprint planning board',    href: '/dashboard/backlog'  },
+    { label: 'Project', icon: '📁', desc: 'New software project',     href: '/dashboard/projects' },
   ]
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-28"
@@ -54,9 +35,9 @@ function GlobalCreateModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="p-2">
-          {options.map(({ label, icon, desc, view }) => (
+          {options.map(({ label, icon, desc, href }) => (
             <button key={label}
-              onClick={() => { setActiveView(view); onClose() }}
+              onClick={() => { router.push(href); onClose() }}
               className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left hover:bg-[#F4F5F7] transition-colors group">
               <span className="text-xl w-8 text-center">{icon}</span>
               <div>
@@ -73,11 +54,12 @@ function GlobalCreateModal({ onClose }: { onClose: () => void }) {
 
 // ── Projects Dropdown (top nav) ─────────────────────────────────────
 function ProjectsDropdown({ onClose }: { onClose: () => void }) {
-  const { projects, project: active, setProject, setActiveView, setBugs, setFeatures, setSprints } = useStore()
+  const { projects, project: active, setProject, setBugs, setFeatures, setSprints } = useStore()
+  const router = useRouter()
 
   function switchProject(p: Project) {
     setProject(p); setBugs([]); setFeatures([]); setSprints([])
-    setActiveView('board')
+    router.push('/dashboard/board')
     onClose()
   }
 
@@ -107,14 +89,14 @@ function ProjectsDropdown({ onClose }: { onClose: () => void }) {
       <div className="h-px mx-3 bg-[#DFE1E6] my-1" />
 
       <button
-        onClick={() => { setActiveView('projects'); onClose() }}
+        onClick={() => { router.push('/dashboard/projects'); onClose() }}
         className="flex items-center justify-between w-full px-3 py-2.5 text-sm font-medium text-[#172B4D] hover:bg-[#F1F2F4] transition-colors">
         <span>View all projects</span>
         <ChevronRight className="w-3.5 h-3.5 text-[#626F86]" />
       </button>
 
       <button
-        onClick={() => { setActiveView('projects'); onClose() }}
+        onClick={() => { router.push('/dashboard/projects'); onClose() }}
         className="flex items-center gap-2 w-full px-3 py-2.5 text-sm font-semibold text-[#0052CC] hover:bg-[#F1F2F4] transition-colors border-t border-[#F4F5F7]">
         <Plus className="w-3.5 h-3.5" />
         Create project
@@ -124,13 +106,20 @@ function ProjectsDropdown({ onClose }: { onClose: () => void }) {
 }
 
 // ── Top Navigation ──────────────────────────────────────────────────
-function GlobalTopNav({ onGoToAdmin }: { onGoToAdmin?: () => void }) {
-  const { user, setUser, project, setActiveView, activeView } = useStore()
-  const router = useRouter()
-  const [userMenuOpen,    setUserMenuOpen]    = useState(false)
-  const [createOpen,      setCreateOpen]      = useState(false)
+function GlobalTopNav({
+  onSignOut,
+  onGoToAdmin,
+}: {
+  onSignOut: () => void
+  onGoToAdmin?: () => void
+}) {
+  const { user, project } = useStore()
+  const router   = useRouter()
+  const pathname = usePathname()
+
+  const [userMenuOpen,     setUserMenuOpen]     = useState(false)
+  const [createOpen,       setCreateOpen]       = useState(false)
   const [projectsDropOpen, setProjectsDropOpen] = useState(false)
-  const [searchOpen,      setSearchOpen]      = useState(false)
 
   const menuRef     = useRef<HTMLDivElement>(null)
   const projDropRef = useRef<HTMLDivElement>(null)
@@ -154,16 +143,10 @@ function GlobalTopNav({ onGoToAdmin }: { onGoToAdmin?: () => void }) {
     return () => document.removeEventListener('keydown', handler)
   }, [])
 
-  async function handleLogout() {
-    await supabase.auth.signOut(); setUser(null); router.push('/')
-  }
-
-  // Global nav only — project-specific nav lives in the sidebar
-  type NavItem = { label: string; view?: View; hasDropdown?: boolean }
-  const navItems: NavItem[] = [
-    { label: 'Your work',   view: 'board'    },
-    { label: 'Projects',    hasDropdown: true },
-    { label: 'Dashboards',  view: 'reports'  },
+  const navItems = [
+    { label: 'Your work',  href: '/dashboard/board'    },
+    { label: 'Projects',   href: null, hasDropdown: true },
+    { label: 'Dashboards', href: '/dashboard/reports'  },
   ]
 
   return (
@@ -174,15 +157,13 @@ function GlobalTopNav({ onGoToAdmin }: { onGoToAdmin?: () => void }) {
         {/* Logo */}
         <div className="flex items-center gap-2 px-2 mr-1 flex-shrink-0 select-none">
           <JiraLogo size={26} />
-          <span className="text-white font-black text-sm tracking-tight hidden sm:block">
-            sethu
-          </span>
+          <span className="text-white font-black text-sm tracking-tight hidden sm:block">sethu</span>
         </div>
 
         {/* Nav links */}
         <nav className="hidden md:flex items-center gap-0.5">
           {navItems.map(item => {
-            const isActive = item.view ? activeView === item.view : false
+            const isActive = item.href ? pathname.startsWith(item.href) : false
             if (item.hasDropdown) {
               return (
                 <div key={item.label} className="relative" ref={projDropRef}>
@@ -205,7 +186,7 @@ function GlobalTopNav({ onGoToAdmin }: { onGoToAdmin?: () => void }) {
             }
             return (
               <button key={item.label}
-                onClick={() => item.view && setActiveView(item.view)}
+                onClick={() => item.href && router.push(item.href)}
                 className={clsx(
                   'px-3 py-1.5 rounded text-sm font-medium transition-colors',
                   isActive
@@ -233,21 +214,13 @@ function GlobalTopNav({ onGoToAdmin }: { onGoToAdmin?: () => void }) {
             <span>Create</span>
           </button>
 
-          {/* Search */}
-          <button
-            onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors text-[rgba(255,255,255,0.6)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white">
-            <Search className="w-3.5 h-3.5" />
-            <span className="hidden lg:block">Search</span>
-          </button>
-
           {/* Help */}
           <button className="p-1.5 rounded text-[rgba(255,255,255,0.6)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white transition-colors">
             <HelpCircle className="w-4 h-4" />
           </button>
 
           {/* Notifications */}
-          <button className="p-1.5 rounded text-[rgba(255,255,255,0.6)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white transition-colors relative">
+          <button className="p-1.5 rounded text-[rgba(255,255,255,0.6)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white transition-colors">
             <Bell className="w-4 h-4" />
           </button>
 
@@ -297,12 +270,12 @@ function GlobalTopNav({ onGoToAdmin }: { onGoToAdmin?: () => void }) {
                   </button>
                 )}
                 <button
-                  onClick={() => { setUserMenuOpen(false); setActiveView('projects') }}
+                  onClick={() => { setUserMenuOpen(false); router.push('/dashboard/projects') }}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7] transition-colors">
                   <Settings className="w-3.5 h-3.5 text-[#626F86]" />
                   Manage projects
                 </button>
-                <button onClick={() => { setUserMenuOpen(false); handleLogout() }}
+                <button onClick={() => { setUserMenuOpen(false); onSignOut() }}
                   className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-[#DE350B] hover:bg-[#FFEBE6] transition-colors border-t border-[#F4F5F7]">
                   <LogOut className="w-3.5 h-3.5" />
                   Sign out
@@ -319,8 +292,17 @@ function GlobalTopNav({ onGoToAdmin }: { onGoToAdmin?: () => void }) {
 }
 
 // ── App Layout ──────────────────────────────────────────────────────
-export default function AppLayout({ onGoToAdmin }: { onGoToAdmin?: () => void }) {
-  const { activeView, setProfiles, setProjectMembers, setChannels, setActiveChannel, project } = useStore()
+export default function AppLayout({
+  children,
+  onSignOut,
+  onGoToAdmin,
+}: {
+  children: React.ReactNode
+  onSignOut: () => void
+  onGoToAdmin?: () => void
+}) {
+  const { setProfiles, setProjectMembers, setChannels, setActiveChannel, project } = useStore()
+  const pathname = usePathname()
 
   useEffect(() => {
     if (!project?.id) return
@@ -341,33 +323,21 @@ export default function AppLayout({ onGoToAdmin }: { onGoToAdmin?: () => void })
     })
   }, [project?.id])
 
-  const isProjectsView = activeView === 'projects'
-  const isChatView     = activeView === 'chat'
-
-  const viewContent: Partial<Record<View, JSX.Element>> = {
-    board:    <Dashboard />,
-    backlog:  <SprintBoard />,
-    bugs:     <BugBoard />,
-    features: <FeatureList />,
-    team:     <TeamView />,
-    projects: <ProjectsPage />,
-    reports:  <Reports />,
-    settings: <ProjectSettings />,
-  }
+  const isProjectsView = pathname === '/dashboard/projects'
+  const isChatView     = pathname === '/dashboard/chat'
 
   return (
     <div className="h-screen flex flex-col" style={{ background: '#F4F5F7' }}>
-      <GlobalTopNav onGoToAdmin={onGoToAdmin} />
+      <GlobalTopNav onSignOut={onSignOut} onGoToAdmin={onGoToAdmin} />
       <div className="flex flex-1 min-h-0">
-        {/* Hide sidebar only on full projects page */}
         {!isProjectsView && <Sidebar onGoToAdmin={onGoToAdmin} />}
 
         <main className="flex-1 flex min-w-0 overflow-hidden">
           {isChatView ? (
-            <ChatPanel fullWidth />
+            <div className="flex-1 flex min-w-0">{children}</div>
           ) : (
             <div className="flex-1 overflow-y-auto min-w-0">
-              {viewContent[activeView] ?? <Dashboard />}
+              {children}
             </div>
           )}
         </main>

@@ -1,11 +1,13 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
-import type { View, Project } from '@/types'
+import type { Project } from '@/types'
 import {
-  LayoutGrid, Bug, Sparkles, MessageSquare, Users,
+  LayoutGrid, Sparkles, MessageSquare, Users,
   ChevronDown, Plus, Check, Loader2, Layers,
   Settings, Shield, BarChart2, Activity,
   Lock, ChevronLeft,
@@ -110,7 +112,7 @@ function NewProjectModal({ onClose, onCreated }: {
 interface NavItem {
   icon: React.FC<{ className?: string }>
   label: string
-  view: View
+  href: string
   badge?: number | null
   adminOnly?: boolean
 }
@@ -121,45 +123,41 @@ interface SidebarProps {
 
 export default function Sidebar({ onGoToAdmin }: SidebarProps) {
   const {
-    activeView, setActiveView, user, project, projects,
+    user, project, projects,
     setProject, addProject,
     bugs, features, sprints,
     setBugs, setFeatures, setSprints,
     projectMembers,
   } = useStore()
 
+  const pathname    = usePathname()
+  const router      = useRouter()
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
   const [dropdownOpen,   setDropdownOpen]   = useState(false)
   const [showNewProject, setShowNewProject] = useState(false)
   const [collapsed,      setCollapsed]      = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const isSiteAdmin    = user?.role === 'admin'
-  const isProjectAdmin = isSiteAdmin || projectMembers.some(m => m.user_id === user?.id && m.role === 'admin')
+  const isProjectAdmin = isSiteAdmin
+    || projectMembers.some(m => m.user_id === user?.id && m.role === 'admin')
+    || project?.created_by === user?.id
 
   const openBugs     = bugs.filter(b => b.status !== 'done').length
   const openFeatures = features.filter(f => f.status !== 'done').length
 
-  // All nav items — adminOnly ones only shown to project admins
   const allNavItems: NavItem[] = [
-    { icon: Activity,      label: 'Summary',          view: 'board'    },
-    { icon: LayoutGrid,    label: 'Board',             view: 'bugs',    badge: openBugs     || null },
-    { icon: Layers,        label: 'Backlog',           view: 'backlog'  },
-    { icon: Bug,           label: 'Issues',            view: 'bugs'     },
-    { icon: Sparkles,      label: 'Features',          view: 'features', badge: openFeatures || null },
-    { icon: MessageSquare, label: 'Chat',              view: 'chat'     },
-    { icon: Users,         label: 'People',            view: 'team'     },
-    { icon: BarChart2,     label: 'Reports',           view: 'reports',  adminOnly: true },
-    { icon: Settings,      label: 'Project settings',  view: 'settings', adminOnly: true },
+    { icon: Activity,      label: 'Summary',         href: '/dashboard/summary'  },
+    { icon: LayoutGrid,    label: 'Board',            href: '/dashboard/board',    badge: openBugs     || null },
+    { icon: Layers,        label: 'Backlog',          href: '/dashboard/backlog'  },
+    { icon: Sparkles,      label: 'Features',         href: '/dashboard/features', badge: openFeatures || null },
+    { icon: MessageSquare, label: 'Chat',             href: '/dashboard/chat'     },
+    { icon: Users,         label: 'People',           href: '/dashboard/people'   },
+    { icon: BarChart2,     label: 'Reports',          href: '/dashboard/reports',  adminOnly: true },
+    { icon: Settings,      label: 'Project settings', href: '/dashboard/settings', adminOnly: true },
   ]
 
-  // Deduplicate: Board and Issues both use 'bugs' view — keep Board, remove Issues duplicate
-  const navItems = allNavItems
-    .filter((item, idx, arr) => {
-      // Keep only the first occurrence of each view per section
-      if (item.label === 'Issues') return false // Board already shows the kanban
-      return true
-    })
-    .filter(item => !item.adminOnly || isProjectAdmin)
+  const navItems = allNavItems.filter(item => !item.adminOnly || isProjectAdmin)
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -173,11 +171,13 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
   function switchProject(p: Project) {
     setProject(p); setBugs([]); setFeatures([]); setSprints([])
     setDropdownOpen(false)
+    router.push('/dashboard/board')
   }
 
   function handleNewProjectCreated(p: Project) {
     addProject(p); setProject(p); setBugs([]); setFeatures([]); setSprints([])
     setShowNewProject(false)
+    router.push('/dashboard/board')
   }
 
   // ── Collapsed sidebar (icon-only rail) ───────────────────────────
@@ -194,10 +194,10 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
           </div>
           <div className="h-px mx-2 bg-[#DFE1E6] mb-1" />
           <nav className="flex-1 flex flex-col items-center gap-0.5 px-1 py-1">
-            {navItems.map(({ icon: Icon, label, view, badge }) => {
-              const active = activeView === view
+            {navItems.map(({ icon: Icon, label, href, badge }) => {
+              const active = pathname === href
               return (
-                <button key={label} onClick={() => setActiveView(view)} title={label}
+                <Link key={label} href={href} title={label}
                   className={clsx(
                     'relative w-9 h-9 rounded-md flex items-center justify-center transition-colors',
                     active ? 'bg-[#E8EDFF]' : 'hover:bg-[#F1F2F4]'
@@ -206,7 +206,7 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
                   {badge != null && (
                     <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-[#DE350B]" />
                   )}
-                </button>
+                </Link>
               )
             })}
           </nav>
@@ -247,7 +247,6 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
                 <div className="text-sm font-semibold text-[#172B4D] truncate leading-tight">
                   {project?.name ?? 'My Project'}
                 </div>
-                {/* Privacy lock */}
                 <span title="Private project"><Lock className="w-3 h-3 text-[#626F86] flex-shrink-0" /></span>
               </div>
               <div className="text-[11px] text-[#626F86] leading-tight">
@@ -313,10 +312,10 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto px-2 py-1">
           {/* Member section */}
           <div className="space-y-0.5 mb-3">
-            {navItems.filter(i => !i.adminOnly).map(({ icon: Icon, label, view, badge }) => {
-              const active = activeView === view && label !== 'Issues'
+            {navItems.filter(i => !i.adminOnly).map(({ icon: Icon, label, href, badge }) => {
+              const active = pathname === href
               return (
-                <button key={label} onClick={() => setActiveView(view)}
+                <Link key={label} href={href}
                   className={clsx(
                     'relative flex items-center gap-3 w-full px-3 py-1.5 rounded-md text-sm transition-colors text-left',
                     active
@@ -336,7 +335,7 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
                       {badge > 99 ? '99+' : badge}
                     </span>
                   )}
-                </button>
+                </Link>
               )
             })}
           </div>
@@ -350,10 +349,10 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
                 </span>
               </div>
               <div className="space-y-0.5">
-                {navItems.filter(i => i.adminOnly).map(({ icon: Icon, label, view }) => {
-                  const active = activeView === view
+                {navItems.filter(i => i.adminOnly).map(({ icon: Icon, label, href }) => {
+                  const active = pathname === href
                   return (
-                    <button key={label} onClick={() => setActiveView(view)}
+                    <Link key={label} href={href}
                       className={clsx(
                         'relative flex items-center gap-3 w-full px-3 py-1.5 rounded-md text-sm transition-colors text-left',
                         active
@@ -365,7 +364,7 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
                       )}
                       <Icon className={clsx('w-4 h-4 flex-shrink-0', active ? 'text-amber-600' : 'text-[#626F86]')} />
                       <span className="flex-1 truncate">{label}</span>
-                    </button>
+                    </Link>
                   )
                 })}
                 {isSiteAdmin && onGoToAdmin && (

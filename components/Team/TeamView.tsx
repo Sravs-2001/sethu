@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
 import {
   Users, Shield, User, UserPlus, Mail, X, CheckCircle,
-  Loader2, Link2, Copy, Check, Lock, Zap,
+  Loader2, Link2, Copy, Check, Lock, Zap, RefreshCw,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { formatDistanceToNow } from 'date-fns'
@@ -15,13 +16,18 @@ type MemberRow = ProjectMember & { profile: Profile }
 
 export default function TeamView() {
   const { project, user } = useStore()
-  const [members, setMembers] = useState<MemberRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const [members, setMembers]       = useState<MemberRow[]>([])
+  const [loading, setLoading]       = useState(true)
   const [showInvite, setShowInvite] = useState(false)
+  const [quickLink, setQuickLink]   = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [copied, setCopied]         = useState(false)
 
   // Check if current user is a project admin
-  const currentMember = members.find(m => m.user_id === user?.id)
-  const isProjectAdmin = currentMember?.role === 'admin' || user?.role === 'admin'
+  const currentMember  = members.find(m => m.user_id === user?.id)
+  const isProjectAdmin = currentMember?.role === 'admin'
+    || user?.role === 'admin'
+    || project?.created_by === user?.id
 
   async function loadMembers() {
     if (!project?.id) return
@@ -33,6 +39,31 @@ export default function TeamView() {
       .order('created_at', { ascending: true })
     setMembers((data ?? []) as MemberRow[])
     setLoading(false)
+  }
+
+  async function generateQuickLink() {
+    if (!project?.id) return
+    setGenerating(true)
+    const res = await fetch('/api/invite/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: project.id,
+        role: 'member',
+        created_by: user?.id,
+        origin: window.location.origin,
+      }),
+    })
+    if (res.ok) {
+      const { url } = await res.json()
+      setQuickLink(url)
+    }
+    setGenerating(false)
+  }
+
+  async function copyQuickLink() {
+    const ok = await copyToClipboard(quickLink)
+    if (ok) { setCopied(true); setTimeout(() => setCopied(false), 2000) }
   }
 
   useEffect(() => { loadMembers() }, [project?.id])
@@ -56,6 +87,47 @@ export default function TeamView() {
           </button>
         )}
       </div>
+
+      {/* Quick invite link bar — visible to admins */}
+      {isProjectAdmin && (
+        <div className="bg-white border border-[#DFE1E6] rounded-xl px-4 py-3.5 flex items-center gap-3"
+          style={{ boxShadow: '0 1px 3px rgba(9,30,66,0.08)' }}>
+          <div className="w-8 h-8 rounded-lg bg-[#DEEBFF] flex items-center justify-center flex-shrink-0">
+            <Link2 className="w-4 h-4 text-[#0052CC]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            {quickLink ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono text-[#44546F] truncate flex-1">{quickLink}</span>
+                <button onClick={copyQuickLink}
+                  className={clsx(
+                    'flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg flex-shrink-0 transition-all',
+                    copied ? 'bg-[#E3FCEF] text-[#36B37E]' : 'bg-[#DEEBFF] text-[#0052CC] hover:bg-[#0052CC] hover:text-white'
+                  )}>
+                  {copied ? <><Check className="w-3 h-3" /> Copied!</> : <><Copy className="w-3 h-3" /> Copy</>}
+                </button>
+                <button onClick={() => { setQuickLink(''); generateQuickLink() }} title="New link"
+                  className="p-1 rounded text-[#7A869A] hover:text-[#0052CC] hover:bg-[#DEEBFF] transition-colors flex-shrink-0">
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-[#172B4D]">Invite link</p>
+                  <p className="text-xs text-[#7A869A]">Generate a link to share with people you want to add as members</p>
+                </div>
+                <button onClick={generateQuickLink} disabled={generating}
+                  className="btn-primary flex-shrink-0 text-xs py-1.5">
+                  {generating
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
+                    : <><Link2 className="w-3.5 h-3.5" /> Get link</>}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Privacy notice */}
       <div className="flex items-start gap-3 bg-[#DEEBFF] border border-[#B3D4FF] rounded-lg px-4 py-3">
@@ -176,24 +248,33 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
   onClose: () => void
 }) {
   const [tab, setTab]               = useState<'link' | 'email'>('link')
+
+  // Link tab
   const [inviteLink, setInviteLink] = useState('')
   const [linkRole, setLinkRole]     = useState<'member' | 'admin'>('member')
-  const [copied, setCopied]         = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const [generating, setGenerating] = useState(false)
 
+  // Email tab
   const [emailInput, setEmailInput] = useState('')
   const [emails, setEmails]         = useState<string[]>([])
   const [emailRole, setEmailRole]   = useState<'member' | 'admin'>('member')
   const [sending, setSending]       = useState(false)
-  const [sentCount, setSentCount]   = useState(0)
-  const [done, setDone]             = useState(false)
+  const [results, setResults]       = useState<{ email: string; inviteUrl: string; emailSent: boolean }[]>([])
+  const [copiedUrl, setCopiedUrl]   = useState('')
 
   async function generateLink() {
     setGenerating(true)
+    setInviteLink('')
     const res = await fetch('/api/invite/link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project_id: projectId, role: linkRole, created_by: currentUserId }),
+      body: JSON.stringify({
+        project_id: projectId,
+        role: linkRole,
+        created_by: currentUserId,
+        origin: window.location.origin,
+      }),
     })
     if (res.ok) {
       const { url } = await res.json()
@@ -202,13 +283,15 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
     setGenerating(false)
   }
 
-  async function copyLink() {
-    await navigator.clipboard.writeText(inviteLink)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  async function copyLink(url: string, key: string) {
+    const ok = await copyToClipboard(url)
+    if (!ok) return
+    setCopiedUrl(key)
+    setTimeout(() => setCopiedUrl(''), 2000)
   }
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
+
   function addEmail(raw: string) {
     const list = raw.split(/[\s,;]+/).map(s => s.trim().toLowerCase())
       .filter(s => isValidEmail(s) && !emails.includes(s))
@@ -219,27 +302,42 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
   async function handleSend() {
     if (!emails.length) return
     setSending(true)
-    let count = 0
+    const out: typeof results = []
     for (const email of emails) {
       try {
         const res = await fetch('/api/team/invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, role: emailRole, project_id: projectId, invited_by: currentUserId }),
+          body: JSON.stringify({
+            email,
+            role: emailRole,
+            project_id: projectId,
+            invited_by: currentUserId,
+            origin: window.location.origin,
+          }),
         })
-        if (res.ok) count++
-      } catch { /* continue */ }
+        if (res.ok) {
+          const body = await res.json()
+          out.push({ email, inviteUrl: body.inviteUrl ?? '', emailSent: body.emailSent ?? false })
+        } else {
+          out.push({ email, inviteUrl: '', emailSent: false })
+        }
+      } catch {
+        out.push({ email, inviteUrl: '', emailSent: false })
+      }
     }
-    setSentCount(count)
+    setResults(out)
     setSending(false)
-    setDone(true)
   }
 
-  return (
+  const isDone = results.length > 0
+
+  return createPortal(
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
       style={{ backdropFilter: 'blur(4px)' }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
         style={{ border: '1px solid #DFE1E6' }}>
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#DFE1E6]">
           <div>
@@ -251,16 +349,54 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
           </button>
         </div>
 
-        {done ? (
-          <div className="p-6 flex flex-col items-center gap-4 text-center">
-            <div className="w-12 h-12 rounded-full bg-[#E3FCEF] flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-[#36B37E]" />
+        {/* ── Email results screen ── */}
+        {isDone ? (
+          <div className="p-5 space-y-3 max-h-[420px] overflow-y-auto">
+            <div className="flex items-center gap-2 mb-1">
+              <CheckCircle className="w-4 h-4 text-[#36B37E]" />
+              <p className="text-sm font-bold text-[#172B4D]">
+                {results.filter(r => r.emailSent).length} of {results.length} email{results.length !== 1 ? 's' : ''} sent
+              </p>
             </div>
-            <div>
-              <p className="font-bold text-[#172B4D] mb-1">Invites sent!</p>
-              <p className="text-sm text-[#5E6C84]">{sentCount} invitation{sentCount !== 1 ? 's' : ''} sent successfully.</p>
-            </div>
-            <button onClick={onClose} className="btn-primary">Done</button>
+
+            {results.map(r => (
+              <div key={r.email} className="rounded-xl border border-[#DFE1E6] overflow-hidden">
+                <div className={clsx(
+                  'flex items-center gap-2 px-3 py-2',
+                  r.emailSent ? 'bg-[#E3FCEF]' : 'bg-[#FFFAE6]'
+                )}>
+                  {r.emailSent
+                    ? <CheckCircle className="w-3.5 h-3.5 text-[#36B37E] flex-shrink-0" />
+                    : <Mail className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />}
+                  <span className="text-xs font-semibold truncate flex-1"
+                    style={{ color: r.emailSent ? '#006644' : '#974F0C' }}>
+                    {r.email}
+                  </span>
+                  <span className="text-[10px] font-medium flex-shrink-0"
+                    style={{ color: r.emailSent ? '#006644' : '#974F0C' }}>
+                    {r.emailSent ? 'Email sent ✓' : 'Use link below'}
+                  </span>
+                </div>
+
+                {/* Always show the invite link for manual sharing */}
+                {r.inviteUrl && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-white">
+                    <Link2 className="w-3 h-3 text-[#7A869A] flex-shrink-0" />
+                    <span className="text-[11px] text-[#44546F] font-mono flex-1 truncate">{r.inviteUrl}</span>
+                    <button
+                      onClick={() => copyLink(r.inviteUrl, r.email)}
+                      className={clsx(
+                        'flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg flex-shrink-0 transition-all',
+                        copiedUrl === r.email ? 'bg-[#E3FCEF] text-[#36B37E]' : 'bg-[#DEEBFF] text-[#0052CC] hover:bg-[#0052CC] hover:text-white'
+                      )}>
+                      {copiedUrl === r.email ? <><Check className="w-2.5 h-2.5" /> Copied</> : <><Copy className="w-2.5 h-2.5" /> Copy</>}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <button onClick={onClose} className="w-full btn-primary justify-center mt-2">Done</button>
           </div>
         ) : (
           <>
@@ -276,13 +412,13 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
             </div>
 
             <div className="p-5">
+              {/* ── Link tab ── */}
               {tab === 'link' && (
                 <div className="space-y-4">
                   <p className="text-sm text-[#5E6C84] leading-relaxed">
                     Share this link with anyone you want to invite. They'll join this project when they sign in.
                   </p>
 
-                  {/* Role selector */}
                   <div>
                     <label className="block text-xs font-semibold text-[#5E6C84] mb-2">Join as</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -305,13 +441,21 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
                         style={{ border: '1px solid #DFE1E6' }}>
                         <Link2 className="w-3.5 h-3.5 text-[#7A869A] flex-shrink-0" />
                         <span className="text-xs text-[#44546F] flex-1 truncate font-mono">{inviteLink}</span>
-                        <button onClick={copyLink}
+                        <button onClick={() => copyLink(inviteLink, 'link')}
                           className={clsx('flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg transition-all flex-shrink-0',
-                            copied ? 'bg-[#E3FCEF] text-[#36B37E]' : 'bg-[#DEEBFF] text-[#0052CC] hover:bg-[#0052CC] hover:text-white')}>
-                          {copied ? <><Check className="w-3 h-3" /> Copied!</> : <><Copy className="w-3 h-3" /> Copy</>}
+                            copiedUrl === 'link' ? 'bg-[#E3FCEF] text-[#36B37E]' : 'bg-[#DEEBFF] text-[#0052CC] hover:bg-[#0052CC] hover:text-white')}>
+                          {copiedUrl === 'link' ? <><Check className="w-3 h-3" /> Copied!</> : <><Copy className="w-3 h-3" /> Copy</>}
                         </button>
                       </div>
-                      <p className="text-xs text-[#7A869A]">Anyone with this link can join as <strong>{linkRole}</strong>. Link is valid for 7 days.</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-[#7A869A]">
+                          Anyone with this link joins as <strong>{linkRole}</strong>. Valid 7 days.
+                        </p>
+                        <button onClick={generateLink} disabled={generating}
+                          className="text-xs text-[#0052CC] hover:underline font-medium flex-shrink-0 ml-2">
+                          {generating ? 'Generating…' : 'New link'}
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <button onClick={generateLink} disabled={generating}
@@ -324,18 +468,17 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
                 </div>
               )}
 
+              {/* ── Email tab ── */}
               {tab === 'email' && (
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs font-semibold text-[#5E6C84]">Email addresses</label>
-                      {/* Mailinator quick-fill for testing */}
                       <button
                         type="button"
                         onClick={() => {
                           const rand = Math.random().toString(36).slice(2, 8)
-                          const addr = `testmember-${rand}@mailinator.com`
-                          setEmailInput(addr)
+                          setEmailInput(`testmember-${rand}@mailinator.com`)
                         }}
                         className="flex items-center gap-1 text-[11px] font-semibold text-[#6554C0] hover:bg-[#EAE6FF] px-2 py-0.5 rounded transition-colors">
                         <Zap className="w-3 h-3" />
@@ -355,12 +498,12 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
                     </div>
                     {emails.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {emails.map(email => (
-                          <span key={email} className="flex items-center gap-1 bg-[#DEEBFF] text-[#0052CC] text-xs font-medium px-2 py-1 rounded-lg">
-                            {email.includes('mailinator') && <Zap className="w-2.5 h-2.5 text-[#6554C0]" />}
-                            {email}
-                            <button onClick={() => setEmails(prev => prev.filter(x => x !== email))}
-                              className="hover:text-[#DE350B] transition-colors">
+                        {emails.map(e => (
+                          <span key={e} className="flex items-center gap-1 bg-[#DEEBFF] text-[#0052CC] text-xs font-medium px-2 py-1 rounded-lg">
+                            {e.includes('mailinator') && <Zap className="w-2.5 h-2.5 text-[#6554C0]" />}
+                            {e}
+                            <button onClick={() => setEmails(prev => prev.filter(x => x !== e))}
+                              className="hover:text-[#DE350B] transition-colors ml-0.5">
                               <X className="w-3 h-3" />
                             </button>
                           </span>
@@ -368,7 +511,7 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
                       </div>
                     )}
                     <p className="text-[11px] text-[#97A0AF] mt-1.5">
-                      Tip: use <span className="font-mono text-[#6554C0]">@mailinator.com</span> addresses for testing — inbox is public at mailinator.com.
+                      Each person gets a personal invite email + a backup link you can copy.
                     </p>
                   </div>
 
@@ -395,7 +538,9 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
                     <button onClick={onClose} className="flex-1 btn-secondary justify-center">Cancel</button>
                     <button onClick={handleSend} disabled={emails.length === 0 || sending}
                       className="flex-1 btn-primary justify-center disabled:opacity-40 disabled:cursor-not-allowed">
-                      {sending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</> : `Send ${emails.length > 0 ? emails.length : ''} invite${emails.length !== 1 ? 's' : ''}`}
+                      {sending
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
+                        : `Send ${emails.length > 0 ? emails.length : ''} invite${emails.length !== 1 ? 's' : ''}`}
                     </button>
                   </div>
                 </div>
@@ -404,6 +549,7 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
-  const { project_id, role = 'member', created_by } = await request.json()
+  const { project_id, role = 'member', created_by, origin } = await request.json()
 
   if (!project_id || !created_by) {
     return NextResponse.json({ error: 'Missing project_id or created_by' }, { status: 400 })
@@ -26,8 +26,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
-  const url    = `${appUrl}/join/project/${data.token}`
+  // Prefer origin sent by client, then env var, then request origin header
+  const base = origin
+    || process.env.NEXT_PUBLIC_APP_URL
+    || request.headers.get('origin')
+    || ''
+
+  const url = `${base}/join/project/${data.token}`
 
   return NextResponse.json({ url, token: data.token })
 }

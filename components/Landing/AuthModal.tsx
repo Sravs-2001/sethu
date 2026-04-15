@@ -11,6 +11,7 @@ type Mode = 'login' | 'register'
 
 interface Props {
   defaultMode?: Mode
+  inviteToken?: string
   onClose: () => void
 }
 
@@ -21,7 +22,7 @@ const APP_FEATURES = [
   { icon: MessageSquare, color: 'text-indigo-400',  label: 'Real-time team chat' },
 ]
 
-export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
+export default function AuthModal({ defaultMode = 'login', inviteToken, onClose }: Props) {
   const [mode, setMode] = useState<Mode>(defaultMode)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -44,6 +45,15 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
 
   function switchMode(m: Mode) { setMode(m); setError(''); setSuccess('') }
 
+  async function acceptInvite() {
+    if (!inviteToken) return
+    await fetch('/api/invite/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: inviteToken }),
+    })
+  }
+
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setSuccess(''); setLoading('email')
@@ -56,8 +66,11 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
       if (error) {
         setError(error.message)
       } else if (data.session) {
+        await acceptInvite()
         window.location.href = '/dashboard'
       } else {
+        // Email confirmation required — persist token so it's accepted after confirmation
+        if (inviteToken) localStorage.setItem('pending_invite_token', inviteToken)
         setSuccess('Check your email to confirm your account, then sign in.')
       }
     } else {
@@ -65,6 +78,7 @@ export default function AuthModal({ defaultMode = 'login', onClose }: Props) {
       if (error) {
         setError(error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message)
       } else if (data.session) {
+        await acceptInvite()
         window.location.href = '/dashboard'
       }
     }

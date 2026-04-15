@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useStore } from '@/store/useStore'
 import { supabase } from '@/lib/supabase/client'
 import Modal from '@/components/ui/Modal'
@@ -122,9 +123,10 @@ function NewProjectModal({ onClose, onCreated }: {
 }
 
 export default function ProjectsPage() {
-  const { projects, project: activeProject, setProject, addProject, setBugs, setFeatures, setSprints, setActiveView } = useStore()
-  const [search, setSearch]             = useState('')
-  const [showCreate, setShowCreate]     = useState(false)
+  const { projects, project: activeProject, setProject, addProject, setBugs, setFeatures, setSprints } = useStore()
+  const router = useRouter()
+  const [search, setSearch]         = useState('')
+  const [showCreate, setShowCreate] = useState(false)
 
   const filtered = projects.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -133,13 +135,13 @@ export default function ProjectsPage() {
 
   function openProject(p: Project) {
     setProject(p); setBugs([]); setFeatures([]); setSprints([])
-    setActiveView('board')
+    router.push('/dashboard/board')
   }
 
   function handleCreated(p: Project) {
     addProject(p); setProject(p); setBugs([]); setFeatures([]); setSprints([])
     setShowCreate(false)
-    setActiveView('board')
+    router.push('/dashboard/board')
   }
 
   return (

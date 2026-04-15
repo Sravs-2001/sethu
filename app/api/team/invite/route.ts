@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { Resend } from 'resend'
 
 export async function POST(request: Request) {
-  const { email, role, project_id, invited_by } = await request.json()
+  const { email, role, project_id, invited_by, origin } = await request.json()
 
   if (!email || !role) {
     return NextResponse.json({ error: 'Missing email or role' }, { status: 400 })
@@ -13,43 +14,114 @@ export async function POST(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // Invite or look up the user
-  const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-    data: { role },
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/auth/callback?next=/dashboard`,
-  })
+  // ── 1. Generate a project invite token (reliable, no email required) ──
+  const appUrl    = origin || process.env.NEXT_PUBLIC_APP_URL || request.headers.get('origin') || ''
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  if (error && !error.message.includes('already been registered')) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  const { data: tokenRow, error: tokenErr } = await supabaseAdmin
+    .from('invite_tokens')
+    .insert({ project_id, role, created_by: invited_by, expires_at: expiresAt })
+    .select('token')
+    .single()
+
+  if (tokenErr || !tokenRow) {
+    return NextResponse.json({ error: tokenErr?.message ?? 'Failed to create invite token' }, { status: 500 })
   }
 
-  // Get the user id (either from invite or existing user lookup)
-  let userId = data?.user?.id
-  if (!userId) {
-    const { data: existing } = await supabaseAdmin.auth.admin.listUsers()
-    const found = existing?.users?.find((u) => u.email === email)
-    userId = found?.id
-  }
+  const inviteUrl = `${appUrl}/join/project/${tokenRow.token}`
 
-  // If we have a project_id and user id, add them to project_members
-  if (userId && project_id) {
-    // Ensure a profile row exists (may not exist yet for pending invites)
+  // ── 2. If user already exists, add them to project_members immediately ──
+  let userId: string | null = null
+  let emailSent = false
+
+  const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+  const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+
+  if (existingUser) {
+    userId = existingUser.id
+
+    // Ensure profile exists
     await supabaseAdmin.from('profiles').upsert(
-      { id: userId, name: email.split('@')[0], role },
+      { id: userId, name: email.split('@')[0], role: 'member' },
       { onConflict: 'id', ignoreDuplicates: true }
     )
 
-    const { error: pmErr } = await supabaseAdmin
+    // Add to project directly
+    await supabaseAdmin
       .from('project_members')
       .upsert(
         { project_id, user_id: userId, role, invited_by: invited_by ?? null },
         { onConflict: 'project_id,user_id' }
       )
-
-    if (pmErr) {
-      return NextResponse.json({ error: pmErr.message }, { status: 500 })
-    }
   }
 
-  return NextResponse.json({ id: userId ?? null })
+  // ── 3. Send invite email ──────────────────────────────────────────────────
+
+  // Get project name for the email body
+  const { data: project } = await supabaseAdmin
+    .from('projects')
+    .select('name, key')
+    .eq('id', project_id)
+    .single()
+
+  const projectName = project?.name ?? 'a project'
+  const roleLabel   = role === 'admin' ? 'Admin' : 'Member'
+
+  const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#F4F5F7; margin:0; padding:40px 20px;">
+  <div style="max-width:480px; margin:0 auto; background:white; border-radius:12px; overflow:hidden; border:1px solid #DFE1E6; box-shadow:0 4px 12px rgba(9,30,66,0.1);">
+    <div style="background:#0052CC; padding:24px 32px;">
+      <span style="color:white; font-size:20px; font-weight:900; letter-spacing:-0.5px;">sethu</span>
+    </div>
+    <div style="padding:32px;">
+      <h2 style="margin:0 0 8px; font-size:20px; font-weight:800; color:#172B4D;">You're invited to join ${projectName}</h2>
+      <p style="margin:0 0 24px; color:#5E6C84; font-size:14px; line-height:1.6;">
+        You've been invited to collaborate on <strong>${projectName}</strong> as a <strong>${roleLabel}</strong>.
+        Click the button below to accept and get access.
+      </p>
+      <a href="${inviteUrl}"
+        style="display:inline-block; background:#0052CC; color:white; text-decoration:none; padding:12px 28px; border-radius:8px; font-weight:700; font-size:14px;">
+        Accept invite →
+      </a>
+      <p style="margin:24px 0 0; font-size:12px; color:#97A0AF; line-height:1.6;">
+        Or copy this link:<br/>
+        <a href="${inviteUrl}" style="color:#0052CC; word-break:break-all;">${inviteUrl}</a>
+      </p>
+      <p style="margin:16px 0 0; font-size:11px; color:#B3BAC5;">
+        This invite expires in 7 days. If you didn't expect this email, you can ignore it.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`
+
+  // Try Resend first (reliable)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const resend = new Resend(process.env.RESEND_API_KEY)
+      const { error: sendErr } = await resend.emails.send({
+        from:    'sethu <onboarding@resend.dev>',
+        to:      [email],
+        subject: `You've been invited to join ${projectName} on sethu`,
+        html:    emailHtml,
+      })
+      if (!sendErr) emailSent = true
+    } catch { /* fall through */ }
+  }
+
+  // Fall back to Supabase invite (works if Resend not configured or fails)
+  if (!emailSent) {
+    try {
+      const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        data:       { role: 'member', invite_role: role, project_id },
+        redirectTo: `${appUrl}/api/auth/callback?next=/dashboard`,
+      })
+      if (!inviteErr || inviteErr.message.includes('already')) emailSent = true
+    } catch { /* not fatal */ }
+  }
+
+  return NextResponse.json({ inviteUrl, emailSent, userId })
 }
