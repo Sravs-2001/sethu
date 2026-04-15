@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
 import { Bug, Sparkles, Rocket, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
+import { STATUSES, STATUS_CONFIG, colors } from '@/lib/constants'
 import { formatDistanceToNow } from 'date-fns'
 
 export default function Dashboard() {
@@ -12,11 +13,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!project) return
-    supabase.from('bugs').select('*, assignee:profiles(*)').eq('project_id', project.id).order('created_at', { ascending: false })
+    supabase.from('bugs').select('*, assignee:profiles(*)')
+      .eq('project_id', project.id).order('created_at', { ascending: false })
       .then(({ data }) => data && setBugs(data as any))
-    supabase.from('features').select('*, assignee:profiles(*)').eq('project_id', project.id).order('created_at', { ascending: false })
+    supabase.from('features').select('*, assignee:profiles(*)')
+      .eq('project_id', project.id).order('created_at', { ascending: false })
       .then(({ data }) => data && setFeatures(data as any))
-    supabase.from('sprints').select('*').eq('project_id', project.id).order('created_at', { ascending: false })
+    supabase.from('sprints').select('*')
+      .eq('project_id', project.id).order('created_at', { ascending: false })
       .then(({ data }) => data && setSprints(data))
   }, [project?.id])
 
@@ -27,23 +31,23 @@ export default function Dashboard() {
   const completedBugs      = bugs.filter(b => b.status === 'done')
 
   const stats = [
-    { label: 'Open Bugs',   value: openBugs.length,           icon: Bug,          iconColor: '#DE350B', iconBg: '#FFEBE6' },
-    { label: 'Critical',    value: criticalBugs.length,        icon: AlertCircle,  iconColor: '#FF8B00', iconBg: '#FFFAE6' },
-    { label: 'In Progress', value: inProgressFeatures.length,  icon: Clock,        iconColor: '#0052CC', iconBg: '#DEEBFF' },
-    { label: 'Resolved',    value: completedBugs.length,       icon: CheckCircle2, iconColor: '#36B37E', iconBg: '#E3FCEF' },
+    { label: 'Open Bugs',   value: openBugs.length,           icon: Bug,          iconColor: colors.red,    iconBg: colors.redLight    },
+    { label: 'Critical',    value: criticalBugs.length,        icon: AlertCircle,  iconColor: colors.orange, iconBg: colors.orangeLight },
+    { label: 'In Progress', value: inProgressFeatures.length,  icon: Clock,        iconColor: colors.blue,   iconBg: colors.blueLight   },
+    { label: 'Resolved',    value: completedBugs.length,       icon: CheckCircle2, iconColor: colors.green,  iconBg: colors.greenLight  },
   ]
 
   const recent = [
-    ...bugs.slice(0,3).map(b => ({ ...b, kind: 'bug' as const })),
-    ...features.slice(0,3).map(f => ({ ...f, kind: 'feature' as const })),
-  ].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0,6)
+    ...bugs.slice(0, 3).map(b => ({ ...b, kind: 'bug'     as const })),
+    ...features.slice(0, 3).map(f => ({ ...f, kind: 'feature' as const })),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 6)
 
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold" style={{ color: '#172B4D' }}>Dashboard</h1>
-        <p className="text-sm mt-0.5" style={{ color: '#5E6C84' }}>Overview of your team's work</p>
+        <h1 className="text-xl font-semibold" style={{ color: colors.textPrimary }}>Dashboard</h1>
+        <p className="text-sm mt-0.5" style={{ color: colors.textSecondary }}>Overview of your team's work</p>
       </div>
 
       {/* Stat cards */}
@@ -54,8 +58,8 @@ export default function Dashboard() {
               style={{ background: iconBg }}>
               <Icon style={{ width: '16px', height: '16px', color: iconColor }} />
             </div>
-            <div className="text-2xl font-bold leading-none" style={{ color: '#172B4D' }}>{value}</div>
-            <div className="text-xs mt-1.5 font-medium" style={{ color: '#5E6C84' }}>{label}</div>
+            <div className="text-2xl font-bold leading-none" style={{ color: colors.textPrimary }}>{value}</div>
+            <div className="text-xs mt-1.5 font-medium" style={{ color: colors.textSecondary }}>{label}</div>
           </div>
         ))}
       </div>
@@ -64,26 +68,33 @@ export default function Dashboard() {
       {activeSprint && (
         <div className="card p-5">
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full" style={{ background: '#36B37E' }} />
-            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#5E6C84' }}>Active Sprint</span>
-            <span className="ml-auto text-xs" style={{ color: '#97A0AF' }}>
+            <div className="w-2 h-2 rounded-full" style={{ background: colors.green }} />
+            <span className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: colors.textSecondary }}>
+              Active Sprint
+            </span>
+            <span className="ml-auto text-xs" style={{ color: colors.textLight }}>
               {activeSprint.start_date} → {activeSprint.end_date}
             </span>
           </div>
-          <div className="text-base font-semibold mb-1" style={{ color: '#172B4D' }}>{activeSprint.name}</div>
-          {activeSprint.goal && <p className="text-sm mb-4" style={{ color: '#42526E' }}>{activeSprint.goal}</p>}
+          <div className="text-base font-semibold mb-1" style={{ color: colors.textPrimary }}>
+            {activeSprint.name}
+          </div>
+          {activeSprint.goal && (
+            <p className="text-sm mb-4" style={{ color: colors.textMuted }}>{activeSprint.goal}</p>
+          )}
           <div className="flex gap-6 mt-4">
-            {(['todo','in_progress','review','done'] as const).map(s => {
+            {STATUSES.map(s => {
               const count = [
                 ...bugs.filter(b => b.sprint_id === activeSprint.id),
                 ...features.filter(f => f.sprint_id === activeSprint.id),
               ].filter(i => i.status === s).length
-              const labels = { todo:'To Do', in_progress:'In Progress', review:'Review', done:'Done' }
-              const colors = { todo:'#97A0AF', in_progress:'#0052CC', review:'#6554C0', done:'#36B37E' }
               return (
                 <div key={s} className="flex flex-col gap-0.5">
-                  <div className="text-xl font-bold" style={{ color: colors[s] }}>{count}</div>
-                  <div className="text-xs font-medium" style={{ color: '#5E6C84' }}>{labels[s]}</div>
+                  <div className="text-xl font-bold" style={{ color: STATUS_CONFIG[s].topColor }}>{count}</div>
+                  <div className="text-xs font-medium" style={{ color: colors.textSecondary }}>
+                    {STATUS_CONFIG[s].label}
+                  </div>
                 </div>
               )
             })}
@@ -93,8 +104,11 @@ export default function Dashboard() {
 
       {/* Recent activity */}
       <div className="card overflow-hidden">
-        <div className="px-5 py-3.5" style={{ borderBottom: '1px solid #DFE1E6' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#5E6C84' }}>Recent Activity</span>
+        <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${colors.border}` }}>
+          <span className="text-xs font-semibold uppercase tracking-wider"
+            style={{ color: colors.textSecondary }}>
+            Recent Activity
+          </span>
         </div>
         <table className="data-table">
           <thead>
@@ -108,22 +122,31 @@ export default function Dashboard() {
           </thead>
           <tbody>
             {recent.length === 0 ? (
-              <tr><td colSpan={5} className="py-12 text-center text-sm" style={{ color: '#7A869A' }}>No items yet. Create a bug or feature to get started.</td></tr>
+              <tr>
+                <td colSpan={5} className="py-12 text-center text-sm"
+                  style={{ color: colors.textFaint }}>
+                  No items yet. Create a bug or feature to get started.
+                </td>
+              </tr>
             ) : recent.map(item => (
               <tr key={item.id}>
                 <td>
                   <div className="flex items-center gap-1.5">
                     {item.kind === 'bug'
-                      ? <Bug className="w-3.5 h-3.5 text-red-400" />
-                      : <Sparkles className="w-3.5 h-3.5" style={{ color: '#6554C0' }} />
+                      ? <Bug      className="w-3.5 h-3.5" style={{ color: colors.red    }} />
+                      : <Sparkles className="w-3.5 h-3.5" style={{ color: colors.purple }} />
                     }
-                    <span className="text-xs capitalize" style={{ color: '#7A869A' }}>{item.kind}</span>
+                    <span className="text-xs capitalize" style={{ color: colors.textFaint }}>
+                      {item.kind}
+                    </span>
                   </div>
                 </td>
-                <td className="font-medium max-w-[220px] truncate" style={{ color: '#172B4D' }}>{item.title}</td>
+                <td className="font-medium max-w-[220px] truncate" style={{ color: colors.textPrimary }}>
+                  {item.title}
+                </td>
                 <td><PriorityBadge priority={item.priority} /></td>
                 <td><StatusBadge status={item.status} /></td>
-                <td className="whitespace-nowrap text-xs" style={{ color: '#7A869A' }}>
+                <td className="whitespace-nowrap text-xs" style={{ color: colors.textFaint }}>
                   {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
                 </td>
               </tr>

@@ -14,11 +14,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import Modal from '@/components/ui/Modal'
-
-const AVATAR_COLORS = [
-  '#0052CC','#6554C0','#00B8D9','#36B37E',
-  '#FF5630','#FF991F','#172B4D','#403294',
-]
+import { AVATAR_COLORS } from '@/lib/constants'
 
 function toKey(name: string) {
   return name.toUpperCase().replace(/[^A-Z0-9\s]/g,'').trim()

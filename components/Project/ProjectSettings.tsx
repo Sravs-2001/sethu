@@ -205,7 +205,7 @@ export default function ProjectSettings() {
               <p className="text-sm font-semibold text-[#172B4D]">{projectMembers.length} member{projectMembers.length !== 1 ? 's' : ''}</p>
               <p className="text-xs text-[#7A869A]">
                 {projectMembers.filter(m => m.role === 'admin').length} admin{projectMembers.filter(m => m.role === 'admin').length !== 1 ? 's' : ''} ·{' '}
-                {projectMembers.filter(m => m.role === 'member').length} member{projectMembers.filter(m => m.role === 'member').length !== 1 ? 's' : ''}
+                {projectMembers.filter(m => m.role === 'developer').length} developer{projectMembers.filter(m => m.role === 'developer').length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>

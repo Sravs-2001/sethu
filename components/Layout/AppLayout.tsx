@@ -6,11 +6,13 @@ import { useStore } from '@/store/useStore'
 import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
 import JiraLogo from '@/components/ui/JiraLogo'
+import NotificationBell from '@/components/Notifications/NotificationBell'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 import type { Project } from '@/types'
 import {
-  Bell, HelpCircle, ChevronDown, LogOut, Shield,
-  Search, Plus, X, Settings, Check,
-  LayoutGrid, ChevronRight,
+  HelpCircle, ChevronDown, LogOut, Shield,
+  Plus, X, Settings, Check,
+  ChevronRight,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -214,15 +216,16 @@ function GlobalTopNav({
             <span>Create</span>
           </button>
 
+          {/* Theme toggle */}
+          <ThemeToggle compact />
+
           {/* Help */}
           <button className="p-1.5 rounded text-[rgba(255,255,255,0.6)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white transition-colors">
             <HelpCircle className="w-4 h-4" />
           </button>
 
           {/* Notifications */}
-          <button className="p-1.5 rounded text-[rgba(255,255,255,0.6)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white transition-colors">
-            <Bell className="w-4 h-4" />
-          </button>
+          <NotificationBell />
 
           {/* User menu */}
           <div className="relative ml-1" ref={menuRef}>
@@ -327,7 +330,7 @@ export default function AppLayout({
   const isChatView     = pathname === '/dashboard/chat'
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: '#F4F5F7' }}>
+    <div className="h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
       <GlobalTopNav onSignOut={onSignOut} onGoToAdmin={onGoToAdmin} />
       <div className="flex flex-1 min-h-0">
         {!isProjectsView && <Sidebar onGoToAdmin={onGoToAdmin} />}
