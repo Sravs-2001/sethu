@@ -90,13 +90,35 @@ const SQL = `
   );
   alter table public.project_members enable row level security;
 
+  -- ── Security-definer helpers (run as DB owner, no RLS recursion) ──
+  create or replace function public.my_project_ids()
+  returns setof uuid language sql security definer stable as $$
+    select project_id from public.project_members where user_id = auth.uid()
+  $$;
+
+  create or replace function public.is_project_admin(pid uuid)
+  returns boolean language sql security definer stable as $$
+    select exists (
+      select 1 from public.project_members
+      where project_id = pid and user_id = auth.uid() and role = 'admin'
+    )
+  $$;
+
+  create or replace function public.is_project_owner(pid uuid)
+  returns boolean language sql security definer stable as $$
+    select exists (
+      select 1 from public.projects
+      where id = pid and created_by = auth.uid()
+    )
+  $$;
+
   -- ── PRIVACY: tighten all RLS policies ──────────────────────────
 
   -- projects: only creator or explicit member can see it
   drop policy if exists "projects_select" on public.projects;
   create policy "projects_select" on public.projects for select to authenticated using (
     created_by = auth.uid()
-    or id in (select project_id from public.project_members where user_id = auth.uid())
+    or id in (select public.my_project_ids())
   );
 
   drop policy if exists "projects_insert" on public.projects;
@@ -105,31 +127,38 @@ const SQL = `
   drop policy if exists "projects_update" on public.projects;
   create policy "projects_update" on public.projects for update to authenticated using (
     created_by = auth.uid()
-    or id in (select project_id from public.project_members where user_id = auth.uid() and role = 'admin')
+    or public.is_project_admin(id)
   );
 
   drop policy if exists "projects_delete" on public.projects;
   create policy "projects_delete" on public.projects for delete to authenticated using (created_by = auth.uid());
 
   -- project_members: see teammates in your projects only
+  -- Uses security-definer functions to avoid infinite recursion
   drop policy if exists "pm_select" on public.project_members;
   create policy "pm_select" on public.project_members for select to authenticated using (
     user_id = auth.uid()
-    or project_id in (select project_id from public.project_members where user_id = auth.uid())
-    or project_id in (select id from public.projects where created_by = auth.uid())
+    or project_id in (select public.my_project_ids())
+    or public.is_project_owner(project_id)
   );
 
   drop policy if exists "pm_insert" on public.project_members;
   create policy "pm_insert" on public.project_members for insert to authenticated with check (
-    exists (select 1 from public.projects where id = project_id and created_by = auth.uid())
-    or exists (select 1 from public.project_members pm2 where pm2.project_id = project_members.project_id and pm2.user_id = auth.uid() and pm2.role = 'admin')
+    public.is_project_owner(project_id)
+    or public.is_project_admin(project_id)
     or user_id = auth.uid()
+  );
+
+  drop policy if exists "pm_update" on public.project_members;
+  create policy "pm_update" on public.project_members for update to authenticated using (
+    public.is_project_owner(project_id)
+    or public.is_project_admin(project_id)
   );
 
   drop policy if exists "pm_delete" on public.project_members;
   create policy "pm_delete" on public.project_members for delete to authenticated using (
-    exists (select 1 from public.projects where id = project_id and created_by = auth.uid())
-    or exists (select 1 from public.project_members pm2 where pm2.project_id = project_id and pm2.user_id = auth.uid() and pm2.role = 'admin')
+    public.is_project_owner(project_id)
+    or public.is_project_admin(project_id)
   );
 
   -- profiles: only see teammates
@@ -137,11 +166,9 @@ const SQL = `
   create policy "profiles_select" on public.profiles for select to authenticated using (
     id = auth.uid()
     or id in (
-      select pm2.user_id from public.project_members pm1
-      join public.project_members pm2 on pm1.project_id = pm2.project_id
-      where pm1.user_id = auth.uid()
+      select user_id from public.project_members
+      where project_id in (select public.my_project_ids())
     )
-    or id in (select created_by from public.projects where created_by = auth.uid())
   );
 
   drop policy if exists "profiles_insert" on public.profiles;

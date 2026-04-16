@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
-  const { token } = await request.json()
+  const { token, notification_id } = await request.json()
 
   if (!token) {
     return NextResponse.json({ error: 'Missing token' }, { status: 400 })
@@ -78,5 +78,21 @@ export async function POST(request: Request) {
     .update({ uses: inviteToken.uses + 1 })
     .eq('token', token)
 
-  return NextResponse.json({ success: true, project_id: inviteToken.project_id })
+  // Mark the invite notification as read if one was provided
+  if (notification_id) {
+    await supabaseAdmin
+      .from('notifications')
+      .update({ read: true })
+      .eq('id', notification_id)
+      .eq('user_id', user.id)
+  }
+
+  // Return the full project so the frontend can add it to the store immediately
+  const { data: project } = await supabaseAdmin
+    .from('projects')
+    .select('*')
+    .eq('id', inviteToken.project_id)
+    .single()
+
+  return NextResponse.json({ success: true, project_id: inviteToken.project_id, project })
 }

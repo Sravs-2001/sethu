@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Bell, Check, CheckCheck, X, Loader2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Bell, Check, CheckCheck, X, Loader2, UserPlus } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { notificationService } from '@/lib/services'
 import { formatDistanceToNow } from 'date-fns'
@@ -21,9 +22,11 @@ const TYPE_ICON: Record<Notification['type'], string> = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function NotificationBell() {
-  const { user, notifications, setNotifications, markNotificationRead, markAllNotificationsRead } = useStore()
-  const [open,    setOpen]    = useState(false)
-  const [loading, setLoading] = useState(false)
+  const { user, notifications, setNotifications, markNotificationRead, markAllNotificationsRead, setProjects, setProject, projects } = useStore()
+  const router = useRouter()
+  const [open,         setOpen]         = useState(false)
+  const [loading,      setLoading]      = useState(false)
+  const [inviteAction, setInviteAction] = useState<Record<string, 'accepting' | 'declining' | 'done'>>({})
   const panelRef = useRef<HTMLDivElement>(null)
 
   const unread = notifications.filter(n => !n.read).length
@@ -65,6 +68,52 @@ export default function NotificationBell() {
     if (!user || unread === 0) return
     await notificationService.markAllRead(user.id)
     markAllNotificationsRead()
+  }
+
+  async function handleAcceptInvite(n: Notification) {
+    const token = n.data?.token as string | undefined
+    if (!token) return
+    setInviteAction(prev => ({ ...prev, [n.id]: 'accepting' }))
+    try {
+      const res = await fetch('/api/invite/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, notification_id: n.id }),
+      })
+      if (!res.ok) {
+        setInviteAction(prev => { const s = { ...prev }; delete s[n.id]; return s })
+        return
+      }
+      const { project } = await res.json()
+      markNotificationRead(n.id)
+      setInviteAction(prev => ({ ...prev, [n.id]: 'done' }))
+      setOpen(false)
+      // Add the project to the store and navigate into it
+      if (project) {
+        const next = [...projects.filter(p => p.id !== project.id), project]
+        setProjects(next as any)
+        setProject(project as any)
+        router.push('/dashboard/board')
+      }
+    } catch {
+      setInviteAction(prev => { const s = { ...prev }; delete s[n.id]; return s })
+    }
+  }
+
+  async function handleDeclineInvite(n: Notification) {
+    const token = n.data?.token as string | undefined
+    setInviteAction(prev => ({ ...prev, [n.id]: 'declining' }))
+    try {
+      await fetch('/api/invite/decline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notification_id: n.id, token }),
+      })
+      markNotificationRead(n.id)
+      setInviteAction(prev => ({ ...prev, [n.id]: 'done' }))
+    } catch {
+      setInviteAction(prev => { const s = { ...prev }; delete s[n.id]; return s })
+    }
   }
 
   return (
@@ -144,44 +193,81 @@ export default function NotificationBell() {
                 <p className="text-xs mt-1" style={{ color: 'var(--t5)' }}>No notifications yet.</p>
               </div>
             ) : (
-              notifications.map(n => (
-                <div
-                  key={n.id}
-                  className="flex gap-3 px-4 py-3 cursor-pointer transition-colors"
-                  style={{
-                    background:   n.read ? 'transparent' : 'var(--blue-nav)',
-                    borderBottom: '1px solid var(--border)',
-                  }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-raised)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = n.read ? 'transparent' : 'var(--blue-nav)'}
-                  onClick={() => !n.read && handleMarkRead(n.id)}>
+              notifications.map(n => {
+                const action = inviteAction[n.id]
+                const isInvite = n.type === 'invite_received'
 
-                  {/* Icon */}
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-                    style={{ background: 'var(--bg-raised)' }}>
-                    {TYPE_ICON[n.type] ?? '🔔'}
+                return (
+                  <div
+                    key={n.id}
+                    className="flex gap-3 px-4 py-3 transition-colors"
+                    style={{
+                      background:   n.read ? 'transparent' : 'var(--blue-nav)',
+                      borderBottom: '1px solid var(--border)',
+                      cursor: isInvite ? 'default' : 'pointer',
+                    }}
+                    onMouseEnter={e => { if (!isInvite) (e.currentTarget as HTMLElement).style.background = 'var(--bg-raised)' }}
+                    onMouseLeave={e => { if (!isInvite) (e.currentTarget as HTMLElement).style.background = n.read ? 'transparent' : 'var(--blue-nav)' }}
+                    onClick={() => { if (!isInvite && !n.read) handleMarkRead(n.id) }}>
+
+                    {/* Icon */}
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
+                      style={{ background: isInvite ? 'var(--blue-bg)' : 'var(--bg-raised)' }}>
+                      {isInvite ? <UserPlus className="w-4 h-4" style={{ color: 'var(--blue)' }} /> : (TYPE_ICON[n.type] ?? '🔔')}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold leading-snug" style={{ color: 'var(--t1)' }}>
+                        {n.title}
+                      </p>
+                      <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--t3)' }}>
+                        {n.body}
+                      </p>
+                      <p className="text-[10px] mt-1" style={{ color: 'var(--t5)' }}>
+                        {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                      </p>
+
+                      {/* Accept / Decline for invite_received */}
+                      {isInvite && !n.read && action !== 'done' && (
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            disabled={!!action}
+                            onClick={() => handleAcceptInvite(n)}
+                            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all disabled:opacity-50"
+                            style={{ background: 'var(--blue)', color: 'white' }}>
+                            {action === 'accepting'
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <Check className="w-3 h-3" />}
+                            Accept
+                          </button>
+                          <button
+                            disabled={!!action}
+                            onClick={() => handleDeclineInvite(n)}
+                            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all disabled:opacity-50"
+                            style={{ background: 'var(--bg-raised)', color: 'var(--t3)', border: '1px solid var(--border)' }}>
+                            {action === 'declining'
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <X className="w-3 h-3" />}
+                            Decline
+                          </button>
+                        </div>
+                      )}
+                      {isInvite && n.read && (
+                        <p className="text-[11px] mt-1.5 font-medium" style={{ color: 'var(--t4)' }}>
+                          Already handled
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Unread dot — only for non-invite notifications */}
+                    {!n.read && !isInvite && (
+                      <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1"
+                        style={{ background: 'var(--blue)' }} />
+                    )}
                   </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold leading-snug" style={{ color: 'var(--t1)' }}>
-                      {n.title}
-                    </p>
-                    <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--t3)' }}>
-                      {n.body}
-                    </p>
-                    <p className="text-[10px] mt-1" style={{ color: 'var(--t5)' }}>
-                      {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-                    </p>
-                  </div>
-
-                  {/* Unread dot */}
-                  {!n.read && (
-                    <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1"
-                      style={{ background: 'var(--blue)' }} />
-                  )}
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>

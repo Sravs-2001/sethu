@@ -30,34 +30,7 @@ export async function POST(request: Request) {
 
   const inviteUrl = `${appUrl}/join/project/${tokenRow.token}`
 
-  // ── 2. If user already exists, add them to project_members immediately ──
-  let userId: string | null = null
-  let emailSent = false
-
-  const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-  const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
-
-  if (existingUser) {
-    userId = existingUser.id
-
-    // Ensure profile exists
-    await supabaseAdmin.from('profiles').upsert(
-      { id: userId, name: email.split('@')[0], role: 'member' },
-      { onConflict: 'id', ignoreDuplicates: true }
-    )
-
-    // Add to project directly
-    await supabaseAdmin
-      .from('project_members')
-      .upsert(
-        { project_id, user_id: userId, role, invited_by: invited_by ?? null },
-        { onConflict: 'project_id,user_id' }
-      )
-  }
-
-  // ── 3. Send invite email ──────────────────────────────────────────────────
-
-  // Get project name for the email body
+  // ── 2. Fetch project name + role label (needed for both notification and email) ──
   const { data: project } = await supabaseAdmin
     .from('projects')
     .select('name, key')
@@ -66,6 +39,62 @@ export async function POST(request: Request) {
 
   const projectName = project?.name ?? 'a project'
   const roleLabel   = role === 'admin' ? 'Admin' : 'Member'
+
+  // ── 3. If user already exists, send them an in-app invite notification ──
+  //    Do NOT add to project_members yet — they must accept first.
+  //    Use the GoTrue admin REST endpoint with email filter (more reliable than listUsers).
+  let userId: string | null = null
+  let emailSent = false
+  let notificationSent = false
+
+  try {
+    // listUsers fetches up to 1000 users per page; filter client-side by email
+    const { data: page1 } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    const existingUser = page1?.users?.find(
+      u => u.email?.toLowerCase() === email.toLowerCase()
+    ) ?? null
+
+    if (existingUser) {
+      userId = existingUser.id
+
+      // Ensure profile exists
+      await supabaseAdmin.from('profiles').upsert(
+        { id: userId, name: email.split('@')[0], role: 'member' },
+        { onConflict: 'id', ignoreDuplicates: true }
+      )
+
+      // Get inviter name
+      const { data: inviterProfile } = invited_by
+        ? await supabaseAdmin.from('profiles').select('name').eq('id', invited_by).single()
+        : { data: null }
+
+      // Send in-app notification
+      const { error: notifErr } = await supabaseAdmin.from('notifications').insert({
+        user_id:    userId,
+        type:       'invite_received',
+        title:      `You've been invited to ${projectName}`,
+        body:       `${inviterProfile?.name ?? 'Someone'} invited you to join as ${roleLabel}.`,
+        read:       false,
+        data: {
+          token:           tokenRow.token,
+          project_id,
+          project_name:    projectName,
+          role,
+          invited_by_name: inviterProfile?.name ?? null,
+        },
+      })
+
+      if (notifErr) {
+        console.error('[invite] notification insert failed:', notifErr.message)
+      } else {
+        notificationSent = true
+      }
+    }
+  } catch (err) {
+    console.error('[invite] user lookup failed:', err)
+  }
+
+  // ── 4. Send invite email ──────────────────────────────────────────────────
 
   const emailHtml = `
 <!DOCTYPE html>
@@ -123,5 +152,5 @@ export async function POST(request: Request) {
     } catch { /* not fatal */ }
   }
 
-  return NextResponse.json({ inviteUrl, emailSent, userId })
+  return NextResponse.json({ inviteUrl, emailSent, userId, notificationSent })
 }

@@ -44,38 +44,42 @@ create table if not exists public.project_members (
 );
 alter table public.project_members enable row level security;
 
+-- Helper functions: run as DB owner (security definer) so they can query
+-- project_members without triggering the same RLS policy recursively.
+create or replace function public.my_project_ids()
+returns setof uuid language sql security definer stable as $$
+  select project_id from public.project_members where user_id = auth.uid()
+$$;
+
+create or replace function public.is_project_admin(pid uuid)
+returns boolean language sql security definer stable as $$
+  select exists (
+    select 1 from public.project_members
+    where project_id = pid and user_id = auth.uid() and role = 'admin'
+  )
+$$;
+
 drop policy if exists "pm_select" on public.project_members;
 create policy "pm_select" on public.project_members for select to authenticated using (
   user_id = auth.uid()
-  or project_id in (select project_id from public.project_members where user_id = auth.uid())
+  or project_id in (select public.my_project_ids())
   or project_id in (select id from public.projects where created_by = auth.uid())
 );
 drop policy if exists "pm_insert" on public.project_members;
 create policy "pm_insert" on public.project_members for insert to authenticated with check (
   exists (select 1 from public.projects where id = project_id and created_by = auth.uid())
-  or exists (
-    select 1 from public.project_members pm2
-    where pm2.project_id = project_members.project_id
-      and pm2.user_id = auth.uid() and pm2.role = 'admin'
-  )
+  or public.is_project_admin(project_id)
   or user_id = auth.uid()
 );
 drop policy if exists "pm_update" on public.project_members;
 create policy "pm_update" on public.project_members for update to authenticated using (
   exists (select 1 from public.projects where id = project_id and created_by = auth.uid())
-  or exists (
-    select 1 from public.project_members pm2
-    where pm2.project_id = project_members.project_id
-      and pm2.user_id = auth.uid() and pm2.role = 'admin'
-  )
+  or public.is_project_admin(project_id)
 );
 drop policy if exists "pm_delete" on public.project_members;
 create policy "pm_delete" on public.project_members for delete to authenticated using (
   exists (select 1 from public.projects where id = project_id and created_by = auth.uid())
-  or exists (
-    select 1 from public.project_members pm2
-    where pm2.project_id = project_id and pm2.user_id = auth.uid() and pm2.role = 'admin'
-  )
+  or public.is_project_admin(project_id)
 );
 
 -- ── 3. projects RLS (tighten to privacy model) ───────────────

@@ -144,22 +144,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     await loadProjects(finalProfile)
   }
 
-  async function loadProjects(profile: Profile) {
-    const ids = await projectService.getMemberProjectIds(profile.id)
-
-    if (ids.length === 0) {
+  async function loadProjects(_profile: Profile) {
+    try {
+      const res = await fetch('/api/projects/mine')
+      if (!res.ok) {
+        setProjects([])
+        setStatus('ready')
+        setRedirectTo('/dashboard/projects')
+        return
+      }
+      const { projects: myProjects } = await res.json()
+      if (myProjects && myProjects.length > 0) {
+        setProjects(myProjects as Project[])
+        setProject(myProjects[0] as Project)
+      } else {
+        setProjects([])
+        setRedirectTo('/dashboard/projects')
+      }
+    } catch {
       setProjects([])
-      setStatus('ready')
       setRedirectTo('/dashboard/projects')
-      return
     }
-
-    const { data: myProjects } = await projectService.getByIds(ids)
-    if (myProjects && myProjects.length > 0) {
-      setProjects(myProjects as Project[])
-      setProject(myProjects[0] as Project)
-    }
-
     setStatus('ready')
   }
 

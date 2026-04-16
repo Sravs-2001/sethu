@@ -109,51 +109,24 @@ export default function AppEntry({ children }: { children?: React.ReactNode }) {
     await checkProject(profile)
   }
 
-  async function checkProject(profile: Profile) {
-    const { id: userId } = profile
+  async function checkProject(_profile: Profile) {
+    try {
+      const res = await fetch('/api/projects/mine')
+      if (res.ok) {
+        const { projects: myProjects } = await res.json()
+        if (myProjects && myProjects.length > 0) {
+          setProjects(myProjects as Project[])
+          setProject(myProjects[0] as Project)
+          setAppMode('user')
+          return
+        }
+      }
+    } catch { /* fall through */ }
 
-    // Run both queries in parallel to avoid sequential round trips
-    const [{ data: memberships }, { data: owned }] = await Promise.all([
-      // 1. Projects where this user was EXPLICITLY invited
-      supabase
-        .from('project_members')
-        .select('project_id')
-        .eq('user_id', userId),
-      // 2. Projects this user created (always visible)
-      supabase
-        .from('projects')
-        .select('id')
-        .eq('created_by', userId),
-    ])
-
-    const memberIds = (memberships ?? []).map((m: any) => m.project_id)
-    const ownedIds = (owned ?? []).map((p: any) => p.id)
-
-    const projectIds = Array.from(new Set([...memberIds, ...ownedIds]))
-
-    if (projectIds.length === 0) {
-      setProjects([])
-      setActiveView('projects')
-      setAppMode('user')
-      router.push('/dashboard/projects')
-      return
-    }
-
-    const { data: myProjects } = await supabase
-      .from('projects')
-      .select('*')
-      .in('id', projectIds)
-      .order('created_at', { ascending: true })
-
-    if (myProjects && myProjects.length > 0) {
-      setProjects(myProjects as Project[])
-      setProject(myProjects[0] as Project)
-      setAppMode('user')
-    } else {
-      setProjects([])
-      setActiveView('projects')
-      setAppMode('user')
-    }
+    setProjects([])
+    setActiveView('projects')
+    setAppMode('user')
+    router.push('/dashboard/projects')
   }
 
   function handleEnterProject(project: Project) {

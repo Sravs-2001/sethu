@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { projectService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import type { Project } from '@/types'
 import ArrowheadIcon from '@/components/ui/ArrowheadIcon'
@@ -77,16 +76,18 @@ export default function CreateProject({ onCreated }: { onCreated: (p: Project) =
     setSaving(true)
     setError('')
 
-    const { data, error: err } = await projectService.create({
-      name: name.trim(), key: key || toKey(name),
-      description: description.trim() || null, avatar_color: color, created_by: user!.id,
+    const res = await fetch('/api/project/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name.trim(), key: key || toKey(name),
+        description: description.trim() || null, avatar_color: color,
+      }),
     })
+    const body = await res.json()
+    if (!res.ok) { setError(body.error || 'Failed to create project'); setSaving(false); return }
 
-    if (err) { setError(err.message); setSaving(false); return }
-
-    await projectService.addMember(data.id, user!.id, 'admin', null)
-
-    onCreated(data as Project)
+    onCreated(body.project as Project)
   }
 
   return (
