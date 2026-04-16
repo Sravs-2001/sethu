@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
+import { authService, profileService, projectService } from '@/lib/services'
 import AppLayout from './AppLayout'
+import AdminLayout from '@/components/Admin/AdminLayout'
 import type { Profile, Project } from '@/types'
 import JiraLogo from '@/components/ui/JiraLogo'
 
@@ -60,19 +61,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setActiveView,
   } = useStore()
 
-  const [status, setStatus] = useState<'loading' | 'ready' | 'no-access'>('loading')
+  const [status,       setStatus]       = useState<'loading' | 'ready' | 'no-access'>('loading')
+  const [redirectTo,   setRedirectTo]   = useState<string | null>(null)
+  const [isAdmin,      setIsAdmin]      = useState(false)
+  const [appMode,      setAppMode]      = useState<'user' | 'admin'>('user')
 
   // ── Auth init ─────────────────────────────────────────────────────────────
   useEffect(() => {
     // If already authenticated (navigating between views), skip re-auth
     if (user) { setStatus('ready'); return }
 
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+    authService.getUser().then(({ data: { user: authUser } }) => {
       if (!authUser) { router.push('/'); return }
       loadProfile(authUser)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = authService.onAuthStateChange(async (event) => {
       if (event === 'SIGNED_OUT') router.push('/')
     })
     return () => subscription.unsubscribe()
@@ -84,6 +88,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const segment = pathname.split('/').filter(Boolean).pop() ?? 'summary'
     const map: Record<string, ReturnType<typeof setActiveView extends (v: infer V) => void ? () => V : never>> = {
       summary:  'board',
+      'my-tasks': 'board',
       board:    'bugs',
       backlog:  'backlog',
       features: 'features',
@@ -114,23 +119,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const userId = authUser.id
     const meta   = authUser.user_metadata ?? {}
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id:         userId,
-          name:       meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User',
-          avatar_url: meta.avatar_url || meta.picture || null,
-          role:       (meta.role as 'admin' | 'member') || 'member',
-        },
-        { onConflict: 'id', ignoreDuplicates: true }
-      )
-      .select()
-      .single()
+    const { data: profile } = await profileService.upsert({
+      id:         userId,
+      name:       meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User',
+      avatar_url: meta.avatar_url || meta.picture || null,
+      role:       (meta.role as 'admin' | 'member') || 'member',
+    })
 
-    const resolved: Profile | null = profile ?? await supabase
-      .from('profiles').select('*').eq('id', userId).single()
-      .then(({ data }) => data)
+    const resolved: Profile | null = profile ?? await profileService.getById(userId).then(({ data }) => data)
 
     const fallback: Profile = {
       id:         userId,
@@ -142,32 +138,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     const finalProfile = resolved ?? fallback
     setUser(finalProfile)
+    setIsAdmin(finalProfile.role === 'admin')
 
     await redeemPendingInvite()
     await loadProjects(finalProfile)
   }
 
   async function loadProjects(profile: Profile) {
-    const [{ data: memberships }, { data: owned }] = await Promise.all([
-      supabase.from('project_members').select('project_id').eq('user_id', profile.id),
-      supabase.from('projects').select('id').eq('created_by', profile.id),
-    ])
-
-    const ids = Array.from(new Set([
-      ...(memberships ?? []).map((m: any) => m.project_id),
-      ...(owned       ?? []).map((p: any) => p.id),
-    ]))
+    const ids = await projectService.getMemberProjectIds(profile.id)
 
     if (ids.length === 0) {
       setProjects([])
       setStatus('ready')
-      router.replace('/dashboard/projects')
+      setRedirectTo('/dashboard/projects')
       return
     }
 
-    const { data: myProjects } = await supabase
-      .from('projects').select('*').in('id', ids).order('created_at', { ascending: true })
-
+    const { data: myProjects } = await projectService.getByIds(ids)
     if (myProjects && myProjects.length > 0) {
       setProjects(myProjects as Project[])
       setProject(myProjects[0] as Project)
@@ -178,10 +165,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // ── Sign out ──────────────────────────────────────────────────────────────
   async function handleSignOut() {
-    await supabase.auth.signOut()
+    await authService.signOut()
     setUser(null)
     router.push('/')
   }
+
+  // ── Admin mode toggle ─────────────────────────────────────────────────────
+  function handleGoToAdmin() { setAppMode('admin') }
+  function handleBackToUser() { setAppMode('user') }
+
+  // ── Deferred redirect (avoids mixing router.replace with in-flight renders) ─
+  useEffect(() => {
+    if (redirectTo) {
+      router.replace(redirectTo)
+      setRedirectTo(null)
+    }
+  }, [redirectTo])
 
   // ── Channel join via ?join= param ─────────────────────────────────────────
   useEffect(() => {
@@ -197,5 +196,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (status === 'loading') return <LoadingScreen />
   if (status === 'no-access') return <NoAccessScreen onSignOut={handleSignOut} />
 
-  return <AppLayout onSignOut={handleSignOut}>{children}</AppLayout>
+  if (appMode === 'admin') {
+    return (
+      <AdminLayout
+        onEnterProject={(p) => { setProject(p); setBugs([]); setFeatures([]); setSprints([]); setAppMode('user') }}
+        onBackToProjects={handleBackToUser}
+      />
+    )
+  }
+
+  return (
+    <AppLayout
+      onSignOut={handleSignOut}
+      onGoToAdmin={isAdmin ? handleGoToAdmin : undefined}
+    >
+      {children}
+    </AppLayout>
+  )
 }

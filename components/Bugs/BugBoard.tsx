@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { bugService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import {
   Plus, Trash2, List, LayoutGrid,
@@ -350,7 +350,7 @@ function DetailPanel({ bug, issueKey, onClose, onSave, onDelete }: {
 type SortField = 'title' | 'priority' | 'status' | 'created_at'
 
 export default function BugBoard() {
-  const { bugs, setBugs, addBug, updateBug, deleteBug, user, project } = useStore()
+  const { bugs, setBugs, addBug, updateBug, deleteBug, user, project, profiles } = useStore()
 
   const [showCreate,     setShowCreate]     = useState(false)
   const [defaultStatus,  setDefaultStatus]  = useState<Status>('todo')
@@ -381,18 +381,9 @@ export default function BugBoard() {
     if (!project) return
     const pid = project.id
 
-    supabase.from('bugs').select('*, assignee:profiles(*)')
-      .eq('project_id', pid).order('created_at', { ascending: false })
-      .then(({ data }) => data && setBugs(data as any))
-
-    const channel = supabase.channel(`bugs-${pid}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bugs' }, () => {
-        supabase.from('bugs').select('*, assignee:profiles(*)')
-          .eq('project_id', pid).order('created_at', { ascending: false })
-          .then(({ data }) => data && setBugs(data as any))
-      }).subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    const refresh = () => bugService.getByProject(pid).then(({ data }) => data && setBugs(data as any))
+    refresh()
+    return bugService.subscribe(pid, refresh)
   }, [project?.id])
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
@@ -415,27 +406,36 @@ export default function BugBoard() {
 
   async function handleCreate(data: Partial<BugType>) {
     if (!user || !project) return
-    const { data: bug } = await supabase.from('bugs')
-      .insert({ ...data, issue_type: data.issue_type ?? 'task', created_by: user.id, project_id: project.id, tags: [] })
-      .select('*, assignee:profiles(*)').single()
+    const { data: bug } = await bugService.create({
+      ...data, issue_type: data.issue_type ?? 'task', created_by: user.id, project_id: project.id, tags: [],
+    })
     if (bug) addBug(bug as any)
   }
 
   async function handleUpdate(data: Partial<BugType>) {
-    if (!selectedBug) return
-    await supabase.from('bugs').update(data).eq('id', selectedBug.id)
-    updateBug(selectedBug.id, data)
+    const id = selectedId
+    if (!id) return
+    await bugService.update(id, data)
+    // When assignee_id changes, also update the joined assignee object so the
+    // card reflects the change immediately (without waiting for realtime refresh)
+    const patch: Partial<BugType> = { ...data }
+    if ('assignee_id' in data) {
+      patch.assignee = data.assignee_id
+        ? (profiles.find(p => p.id === data.assignee_id) as any)
+        : undefined
+    }
+    updateBug(id, patch)
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this issue?')) return
-    await supabase.from('bugs').delete().eq('id', id)
+    await bugService.delete(id)
     deleteBug(id)
     if (selectedId === id) setSelectedId(null)
   }
 
   async function handleStatusChange(bugId: string, status: Status) {
-    await supabase.from('bugs').update({ status }).eq('id', bugId)
+    await bugService.update(bugId, { status })
     updateBug(bugId, { status })
   }
 
@@ -466,20 +466,20 @@ export default function BugBoard() {
 
   const PRIORITY_ORDER: Record<Priority, number> = { critical: 0, high: 1, medium: 2, low: 3 }
 
-  const filtered = bugs.filter(b =>
-    (!filterPriority || b.priority  === filterPriority) &&
+  const filtered = useMemo(() => bugs.filter(b =>
+    (!filterPriority || b.priority   === filterPriority) &&
     (!filterType     || b.issue_type === filterType) &&
     (!filterMine     || b.assignee_id === user?.id)
-  )
+  ), [bugs, filterPriority, filterType, filterMine, user?.id])
 
-  const sorted = [...filtered].sort((a, b) => {
+  const sorted = useMemo(() => [...filtered].sort((a, b) => {
     let cmp = 0
     if (sortField === 'priority') cmp = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]
     else if (sortField === 'status') cmp = STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status)
     else if (sortField === 'title')  cmp = a.title.localeCompare(b.title)
     else cmp = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     return sortAsc ? cmp : -cmp
-  })
+  }), [filtered, sortField, sortAsc])
 
   function toggleSort(field: SortField) {
     if (sortField === field) setSortAsc(a => !a)

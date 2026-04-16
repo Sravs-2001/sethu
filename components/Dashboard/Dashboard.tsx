@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
+import { bugService, featureService, sprintService } from '@/lib/services'
 import { Bug, Sparkles, Rocket, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
 import { STATUSES, STATUS_CONFIG, colors } from '@/lib/constants'
@@ -13,15 +13,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!project) return
-    supabase.from('bugs').select('*, assignee:profiles(*)')
-      .eq('project_id', project.id).order('created_at', { ascending: false })
-      .then(({ data }) => data && setBugs(data as any))
-    supabase.from('features').select('*, assignee:profiles(*)')
-      .eq('project_id', project.id).order('created_at', { ascending: false })
-      .then(({ data }) => data && setFeatures(data as any))
-    supabase.from('sprints').select('*')
-      .eq('project_id', project.id).order('created_at', { ascending: false })
-      .then(({ data }) => data && setSprints(data))
+    bugService.getByProject(project.id).then(({ data }) => data && setBugs(data as any))
+    featureService.getByProject(project.id).then(({ data }) => data && setFeatures(data as any))
+    sprintService.getByProject(project.id).then(({ data }) => data && setSprints(data ?? []))
   }, [project?.id])
 
   const activeSprint       = sprints.find(s => s.status === 'active')

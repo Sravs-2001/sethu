@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
+import { projectService, chatService } from '@/lib/services'
 import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
+import HomeSidebar from './HomeSidebar'
 import JiraLogo from '@/components/ui/JiraLogo'
 import NotificationBell from '@/components/Notifications/NotificationBell'
 import ThemeToggle from '@/components/ui/ThemeToggle'
@@ -310,30 +311,33 @@ export default function AppLayout({
   useEffect(() => {
     if (!project?.id) return
 
-    supabase
-      .from('project_members')
-      .select('*, profile:profiles(*)')
-      .eq('project_id', project.id)
-      .then(({ data }) => {
-        if (data) {
-          setProjectMembers(data)
-          setProfiles(data.map((m: any) => m.profile).filter(Boolean))
-        }
-      })
+    projectService.getMembers(project.id).then(({ data }) => {
+      if (data) {
+        setProjectMembers(data)
+        setProfiles(data.map((m: any) => m.profile).filter(Boolean))
+      }
+    })
 
-    supabase.from('channels').select('*').order('name').then(({ data }) => {
+    chatService.getChannels().then(({ data }) => {
       if (data) { setChannels(data); if (data.length > 0) setActiveChannel(data[0]) }
     })
   }, [project?.id])
 
-  const isProjectsView = pathname === '/dashboard/projects'
-  const isChatView     = pathname === '/dashboard/chat'
+  const isChatView  = pathname === '/dashboard/chat'
+
+  // Home pages: no project context needed
+  const HOME_PATHS  = ['/dashboard/projects', '/dashboard/my-tasks', '/dashboard/summary']
+  const isHomePage  = !project || HOME_PATHS.some(p => pathname.startsWith(p))
 
   return (
     <div className="h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
       <GlobalTopNav onSignOut={onSignOut} onGoToAdmin={onGoToAdmin} />
       <div className="flex flex-1 min-h-0">
-        {!isProjectsView && <Sidebar onGoToAdmin={onGoToAdmin} />}
+
+        {isHomePage
+          ? <HomeSidebar />
+          : <Sidebar onGoToAdmin={onGoToAdmin} />
+        }
 
         <main className="flex-1 flex min-w-0 overflow-hidden">
           {isChatView ? (

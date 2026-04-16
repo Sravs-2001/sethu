@@ -80,7 +80,7 @@ export default function JoinProjectPage() {
       return
     }
     setStatus('joined')
-    setTimeout(() => router.push('/dashboard'), 1800)
+    setTimeout(() => { window.location.href = '/dashboard/projects' }, 1800)
   }
 
   // ── Auth form submit ──────────────────────────────────────────────
@@ -90,21 +90,23 @@ export default function JoinProjectPage() {
     setAuthLoading(true)
 
     if (authMode === 'signup') {
-      const { data, error } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { name, full_name: name } },
+      // Create user server-side with email already confirmed (no confirmation email needed)
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name }),
       })
+      const body = await res.json()
+      if (!res.ok) { setAuthError(body.error ?? 'Failed to create account.'); setAuthLoading(false); return }
+
+      // Sign in immediately after account creation
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       setAuthLoading(false)
       if (error) { setAuthError(error.message); return }
       if (data.session) {
-        // Immediately authed — join the project right now
         setAuthed(true)
         setUserId(data.session.user.id)
         await acceptInvite(data.session.user.id)
-      } else {
-        // Email confirmation required — persist token so it redeems after confirm
-        localStorage.setItem('pending_invite_token', token)
-        setNeedsConfirm(true)
       }
     } else {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })

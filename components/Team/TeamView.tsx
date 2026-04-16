@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { supabase } from '@/lib/supabase/client'
+import { projectService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import {
   Users, Shield, User, UserPlus, Mail, X, CheckCircle,
@@ -52,13 +52,12 @@ export default function TeamView() {
     || project?.created_by === user?.id
 
   async function loadMembers() {
-    if (!project?.id) return
+    if (!project?.id) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
-    const { data } = await supabase
-      .from('project_members')
-      .select('*, profile:profiles(*)')
-      .eq('project_id', project.id)
-      .order('created_at', { ascending: true })
+    const { data } = await projectService.getMembers(project.id)
     setMembers((data ?? []) as MemberRow[])
     setLoading(false)
   }
@@ -162,7 +161,15 @@ export default function TeamView() {
         </div>
       </div>
 
-      {loading ? (
+      {!project && !loading ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-14 h-14 bg-[#F4F5F7] rounded-2xl flex items-center justify-center mb-3">
+            <Users className="w-7 h-7 text-[#B3BAC5]" />
+          </div>
+          <p className="text-sm font-semibold text-[#172B4D] mb-1">No project selected</p>
+          <p className="text-sm text-[#7A869A]">Select or create a project first to manage its members.</p>
+        </div>
+      ) : loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-[#0052CC]" />
         </div>

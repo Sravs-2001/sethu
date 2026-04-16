@@ -6,7 +6,7 @@ import {
   ChevronDown, Calendar, Tag, User2, Flag, Layers,
   Send, Loader2,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase/client'
+import { commentService, bugService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import {
   STATUSES, STATUS_CONFIG, PRIORITIES, PRIORITY_CONFIG,
@@ -199,22 +199,12 @@ export default function TaskDetail({ task, issueKey, onClose, onSave, onDelete }
   useEffect(() => {
     setLoadingComments(true)
     Promise.all([
-      supabase
-        .from('comments')
-        .select('*, user:profiles(*)')
-        .eq('task_id', task.id)
-        .order('created_at', { ascending: true })
-        .then(({ data }) => {
-          if (data) setComments(task.id, data as Comment[])
-        }),
-      supabase
-        .from('activity_logs')
-        .select('*, user:profiles(*)')
-        .eq('task_id', task.id)
-        .order('created_at', { ascending: false })
-        .then(({ data }) => {
-          if (data) setActivity(data as ActivityLog[])
-        }),
+      commentService.getByTask(task.id).then(({ data }) => {
+        if (data) setComments(task.id, data as Comment[])
+      }),
+      commentService.getActivity(task.id).then(({ data }) => {
+        if (data) setActivity(data as ActivityLog[])
+      }),
     ]).finally(() => setLoadingComments(false))
   }, [task.id])
 
@@ -282,11 +272,7 @@ export default function TaskDetail({ task, issueKey, onClose, onSave, onDelete }
   async function postComment() {
     if (!commentText.trim() || !user) return
     setPosting(true)
-    const { data } = await supabase
-      .from('comments')
-      .insert({ task_id: task.id, user_id: user.id, content: commentText.trim() })
-      .select('*, user:profiles(*)')
-      .single()
+    const { data } = await commentService.create(task.id, user.id, commentText.trim())
     if (data) {
       addComment(data as Comment)
       setCommentText('')
@@ -295,7 +281,7 @@ export default function TaskDetail({ task, issueKey, onClose, onSave, onDelete }
   }
 
   async function handleDeleteComment(commentId: string) {
-    await supabase.from('comments').delete().eq('id', commentId)
+    await commentService.delete(commentId)
     deleteComment(task.id, commentId)
   }
 

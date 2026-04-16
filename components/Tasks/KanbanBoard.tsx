@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/sortable'
 import { useDroppable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-import { supabase } from '@/lib/supabase/client'
+import { bugService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import {
   Plus, List, LayoutGrid, User, Search,
@@ -599,18 +599,9 @@ export default function KanbanBoard() {
     if (!project) return
     const pid = project.id
 
-    supabase.from('bugs').select('*, assignee:profiles(*), reporter:profiles(*)')
-      .eq('project_id', pid).order('created_at', { ascending: false })
-      .then(({ data }) => data && setBugs(data as any))
-
-    const channel = supabase.channel(`kanban-${pid}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bugs' }, () => {
-        supabase.from('bugs').select('*, assignee:profiles(*), reporter:profiles(*)')
-          .eq('project_id', pid).order('created_at', { ascending: false })
-          .then(({ data }) => data && setBugs(data as any))
-      }).subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    const refresh = () => bugService.getByProject(pid).then(({ data }) => data && setBugs(data as any))
+    refresh()
+    return bugService.subscribe(pid, refresh)
   }, [project?.id])
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
@@ -628,21 +619,21 @@ export default function KanbanBoard() {
   // ── CRUD ──────────────────────────────────────────────────────────────────
   async function handleCreate(data: Partial<Task>) {
     if (!user || !project) return
-    const { data: bug } = await supabase.from('bugs')
-      .insert({ ...data, issue_type: data.issue_type ?? 'task', created_by: user.id, project_id: project.id, tags: [], labels: [] })
-      .select('*, assignee:profiles(*)').single()
+    const { data: bug } = await bugService.create({
+      ...data, issue_type: data.issue_type ?? 'task', created_by: user.id, project_id: project.id, tags: [],
+    })
     if (bug) addBug(bug as any)
   }
 
   async function handleUpdate(data: Partial<Task>) {
     if (!selectedTask) return
-    await supabase.from('bugs').update(data).eq('id', selectedTask.id)
+    await bugService.update(selectedTask.id, data)
     updateBug(selectedTask.id, data)
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this issue?')) return
-    await supabase.from('bugs').delete().eq('id', id)
+    await bugService.delete(id)
     deleteBug(id)
     if (selectedId === id) setSelectedId(null)
   }
@@ -680,7 +671,7 @@ export default function KanbanBoard() {
     const { active } = event
     const task = bugs.find(b => b.id === active.id)
     if (task) {
-      supabase.from('bugs').update({ status: task.status }).eq('id', task.id)
+      bugService.update(task.id, { status: task.status })
     }
     setActiveId(null)
   }

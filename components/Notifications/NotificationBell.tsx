@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Bell, Check, CheckCheck, X, Loader2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
+import { notificationService } from '@/lib/services'
 import { formatDistanceToNow } from 'date-fns'
 import type { Notification } from '@/types'
 
@@ -32,34 +32,17 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!user) return
     setLoading(true)
-    supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(30)
-      .then(({ data }) => {
-        if (data) setNotifications(data as Notification[])
-        setLoading(false)
-      })
+    notificationService.getByUser(user.id).then(({ data }) => {
+      if (data) setNotifications(data as Notification[])
+      setLoading(false)
+    })
   }, [user?.id])
 
   // ── Realtime subscription ─────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return
-    const channel = supabase
-      .channel(`notifications-${user.id}`)
-      .on('postgres_changes', {
-        event:  'INSERT',
-        schema: 'public',
-        table:  'notifications',
-        filter: `user_id=eq.${user.id}`,
-      }, payload => {
-        setNotifications([payload.new as Notification, ...notifications])
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [user?.id, notifications])
+    return notificationService.subscribe(user.id, n => useStore.getState().addNotification(n))
+  }, [user?.id])
 
   // ── Close panel on outside click ─────────────────────────────────────────
   useEffect(() => {
@@ -74,13 +57,13 @@ export default function NotificationBell() {
 
   // ── Mark read ─────────────────────────────────────────────────────────────
   async function handleMarkRead(id: string) {
-    await supabase.from('notifications').update({ read: true }).eq('id', id)
+    await notificationService.markRead(id)
     markNotificationRead(id)
   }
 
   async function handleMarkAllRead() {
     if (!user || unread === 0) return
-    await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false)
+    await notificationService.markAllRead(user.id)
     markAllNotificationsRead()
   }
 

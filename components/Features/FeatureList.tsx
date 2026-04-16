@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { featureService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import { Plus, Sparkles, Trash2, Pencil } from 'lucide-react'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
@@ -127,42 +127,31 @@ export default function FeatureList() {
     if (!project) return
     const pid = project.id
 
-    supabase.from('features').select('*, assignee:profiles(*)')
-      .eq('project_id', pid).order('created_at', { ascending: false })
-      .then(({ data }) => data && setFeatures(data as any))
-
-    const channel = supabase.channel(`features-realtime-${pid}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'features' }, () => {
-        supabase.from('features').select('*, assignee:profiles(*)')
-          .eq('project_id', pid).order('created_at', { ascending: false })
-          .then(({ data }) => data && setFeatures(data as any))
-      }).subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    const refresh = () => featureService.getByProject(pid).then(({ data }) => data && setFeatures(data as any))
+    refresh()
+    return featureService.subscribe(pid, refresh)
   }, [project?.id])
 
   async function handleCreate(data: Partial<Feature>) {
     if (!user || !project) return
-    const { data: feat } = await supabase.from('features')
-      .insert({ ...data, created_by: user.id, project_id: project.id })
-      .select('*, assignee:profiles(*)').single()
+    const { data: feat } = await featureService.create({ ...data, created_by: user.id, project_id: project.id })
     if (feat) addFeature(feat as any)
   }
 
   async function handleUpdate(data: Partial<Feature>) {
     if (!editing) return
-    await supabase.from('features').update(data).eq('id', editing.id)
+    await featureService.update(editing.id, data)
     updateFeature(editing.id, data)
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this feature?')) return
-    await supabase.from('features').delete().eq('id', id)
+    await featureService.delete(id)
     deleteFeature(id)
   }
 
   async function handleStatusChange(feature: Feature, status: Status) {
-    await supabase.from('features').update({ status }).eq('id', feature.id)
+    await featureService.update(feature.id, { status })
     updateFeature(feature.id, { status })
   }
 

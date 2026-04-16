@@ -3,17 +3,18 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase/client'
+import { authService, profileService, projectService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import AppLayout from './Layout/AppLayout'
 import AdminLayout from './Admin/AdminLayout'
 import type { Profile, Project } from '@/types'
 import JiraLogo from '@/components/ui/JiraLogo'
+import { supabase } from '@/lib/supabase/client'
 
 type AppMode = 'loading' | 'admin' | 'user' | 'no-access'
 
-export default function AppEntry() {
-  const router       = useRouter()
+export default function AppEntry({ children }: { children?: React.ReactNode }) {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const {
     setUser, setProject, setProjects,
@@ -21,16 +22,16 @@ export default function AppEntry() {
     channels, setActiveChannel, setActiveView,
   } = useStore()
 
-  const [appMode, setAppMode]   = useState<AppMode>('loading')
+  const [appMode, setAppMode] = useState<AppMode>('loading')
   const [userRole, setUserRole] = useState<'admin' | 'member'>('member')
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    authService.getUser().then(({ data: { user } }) => {
       if (user) loadProfile(user)
       else router.push('/')
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, _session) => {
+    const { data: { subscription } } = authService.onAuthStateChange(async (event, _session) => {
       if (event === 'SIGNED_OUT') router.push('/')
     })
     return () => subscription.unsubscribe()
@@ -61,7 +62,7 @@ export default function AppEntry() {
 
   async function loadProfile(authUser: User) {
     const userId = authUser.id
-    const meta   = authUser.user_metadata ?? {}
+    const meta = authUser.user_metadata ?? {}
 
     // Single upsert: creates on first login, returns existing on subsequent logins
     // onConflict keeps the existing row (preserves any manual role changes)
@@ -69,10 +70,10 @@ export default function AppEntry() {
       .from('profiles')
       .upsert(
         {
-          id:         userId,
-          name:       meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User',
+          id: userId,
+          name: meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User',
           avatar_url: meta.avatar_url || meta.picture || null,
-          role:       (meta.role as 'admin' | 'member') || 'member',
+          role: (meta.role as 'admin' | 'member') || 'member',
         },
         { onConflict: 'id', ignoreDuplicates: true }
       )
@@ -81,7 +82,7 @@ export default function AppEntry() {
 
     if (!profile) {
       // Fallback: fetch existing profile if upsert returned nothing
-      const { data: existing } = await supabase.from('profiles').select('*').eq('id', userId).single()
+      const { data: existing } = await profileService.getById(userId)
       if (existing) {
         setUser(existing)
         setUserRole(existing.role)
@@ -90,10 +91,10 @@ export default function AppEntry() {
       } else {
         // Still no profile — use minimal info from auth so the app doesn't hang on loading
         const fallback = {
-          id:         userId,
-          name:       meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User',
+          id: userId,
+          name: meta.full_name || meta.name || meta.user_name || authUser.email?.split('@')[0] || 'User',
           avatar_url: null,
-          role:       'member' as const,
+          role: 'member' as const,
         }
         setUser(fallback as any)
         await redeemPendingInvite()
@@ -126,7 +127,7 @@ export default function AppEntry() {
     ])
 
     const memberIds = (memberships ?? []).map((m: any) => m.project_id)
-    const ownedIds  = (owned ?? []).map((p: any) => p.id)
+    const ownedIds = (owned ?? []).map((p: any) => p.id)
 
     const projectIds = Array.from(new Set([...memberIds, ...ownedIds]))
 
@@ -134,6 +135,7 @@ export default function AppEntry() {
       setProjects([])
       setActiveView('projects')
       setAppMode('user')
+      router.push('/dashboard/projects')
       return
     }
 
@@ -200,7 +202,7 @@ export default function AppEntry() {
             </p>
           </div>
           <button
-            onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
+            onClick={async () => { await authService.signOut(); router.push('/') }}
             className="text-sm text-[#0052CC] hover:underline font-medium"
           >
             Sign out
@@ -216,10 +218,10 @@ export default function AppEntry() {
 
   return (
     <AppLayout
-      onSignOut={async () => { await supabase.auth.signOut(); router.push('/') }}
+      onSignOut={async () => { await authService.signOut(); router.push('/') }}
       onGoToAdmin={userRole === 'admin' ? handleBackToAdmin : undefined}
     >
-      <div />
+      {children ?? <div />}
     </AppLayout>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { chatService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import { X, Hash, Link2, Mail, Check, Copy } from 'lucide-react'
 import type { Channel } from '@/types'
@@ -26,10 +26,7 @@ export default function CreateChannelModal({ onClose }: Props) {
     e.preventDefault()
     if (!slug) return
     setError(''); setLoading(true)
-    const { data, error: err } = await supabase
-      .from('channels')
-      .insert({ name: slug, description: description.trim() || null })
-      .select().single()
+    const { data, error: err } = await chatService.createChannel(slug, description.trim() || undefined)
     if (err) {
       setError(err.message.includes('unique') ? 'A channel with that name already exists.' : err.message)
     } else if (data) {

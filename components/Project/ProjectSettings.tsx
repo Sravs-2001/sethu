@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
+import { projectService } from '@/lib/services'
 import { Settings, Lock, Trash2, Loader2, Check, Shield, Users } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -50,10 +50,9 @@ export default function ProjectSettings() {
     if (!name.trim()) return
     setSaving(true); setError(''); setSaved(false)
 
-    const { data, error: err } = await supabase.from('projects')
-      .update({ name: name.trim(), description: description.trim() || null, avatar_color: color })
-      .eq('id', proj.id)
-      .select().single()
+    const { data, error: err } = await projectService.update(proj.id, {
+      name: name.trim(), description: description.trim() || null, avatar_color: color,
+    })
 
     if (err) { setError(err.message); setSaving(false); return }
     setProject(data)
@@ -65,11 +64,7 @@ export default function ProjectSettings() {
   async function handleDelete() {
     if (confirmName !== proj.name) return
     setDeleting(true)
-    await supabase.from('bugs').delete().eq('project_id', proj.id)
-    await supabase.from('features').delete().eq('project_id', proj.id)
-    await supabase.from('sprints').delete().eq('project_id', proj.id)
-    await supabase.from('project_members').delete().eq('project_id', proj.id)
-    await supabase.from('projects').delete().eq('id', proj.id)
+    await projectService.delete(proj.id)
 
     const remaining = projects.filter(p => p.id !== proj.id)
     setProjects(remaining)

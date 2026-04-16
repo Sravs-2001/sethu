@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { projectService, profileService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import {
   Users, Shield, User, Plus, Trash2,
@@ -29,12 +29,8 @@ export default function AdminTeamView() {
   async function loadTeam() {
     setLoading(true)
     // Load all profiles + their project memberships
-    const { data: pms } = await supabase
-      .from('project_members')
-      .select('*, profile:profiles(*)')
-      .order('created_at', { ascending: true })
-
-    const { data: allProjects } = await supabase.from('projects').select('id, name')
+    const { data: pms } = await projectService.getAllMembers()
+    const { data: allProjects } = await projectService.getAllProjectNames()
 
     // Group by user
     const byUser: Record<string, MemberWithProjects> = {}
@@ -61,13 +57,12 @@ export default function AdminTeamView() {
   useEffect(() => { loadTeam() }, [])
 
   async function handleRemoveFromProject(userId: string, projectId: string) {
-    await supabase.from('project_members').delete()
-      .eq('user_id', userId).eq('project_id', projectId)
+    await projectService.removeMember(projectId, userId)
     await loadTeam()
   }
 
   async function handleRoleChange(userId: string, newRole: 'admin' | 'member') {
-    await supabase.from('profiles').update({ role: newRole }).eq('id', userId)
+    await profileService.updateRole(userId, newRole)
     await loadTeam()
   }
 

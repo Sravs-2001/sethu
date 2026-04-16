@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
+import { projectService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import type { Project } from '@/types'
 import {
@@ -39,14 +39,12 @@ function NewProjectModal({ onClose, onCreated }: {
     e.preventDefault()
     if (!name.trim() || !user) return
     setSaving(true); setError('')
-    const { data, error: err } = await supabase.from('projects')
-      .insert({ name: name.trim(), key: key || toKey(name), description: description.trim() || null, avatar_color: color, created_by: user.id })
-      .select().single()
+    const { data, error: err } = await projectService.create({
+      name: name.trim(), key: key || toKey(name),
+      description: description.trim() || null, avatar_color: color, created_by: user.id,
+    })
     if (err) { setError(err.message); setSaving(false); return }
-    await supabase.from('project_members').upsert(
-      { project_id: data.id, user_id: user.id, role: 'admin', invited_by: null },
-      { onConflict: 'project_id,user_id' }
-    )
+    await projectService.addMember(data.id, user.id, 'admin', null)
     onCreated(data as Project)
   }
 

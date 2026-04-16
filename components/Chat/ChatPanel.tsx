@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
+import { chatService } from '@/lib/services'
 import { Send, Hash, ChevronRight, MessageSquare, Plus, Link2, Check } from 'lucide-react'
 import { format, isToday, isYesterday } from 'date-fns'
 import type { Message } from '@/types'
@@ -29,18 +29,13 @@ export default function ChatPanel({ fullWidth = false }: Props) {
 
   useEffect(() => {
     if (!activeChannel) return
-    supabase.from('messages').select('*, user:profiles(*)')
-      .eq('channel_id', activeChannel.id).order('created_at', { ascending: true }).limit(100)
-      .then(({ data }) => { if (data) setMessages(activeChannel.id, data as Message[]) })
+    chatService.getMessages(activeChannel.id).then(({ data }) => {
+      if (data) setMessages(activeChannel.id, data as Message[])
+    })
   }, [activeChannel?.id])
 
   useEffect(() => {
-    const channel = supabase.channel('chat-messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
-        const { data } = await supabase.from('messages').select('*, user:profiles(*)').eq('id', payload.new.id).single()
-        if (data) addMessage(data as Message)
-      }).subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return chatService.subscribe(msg => addMessage(msg))
   }, [])
 
   useEffect(() => {
@@ -54,7 +49,7 @@ export default function ChatPanel({ fullWidth = false }: Props) {
     const content = input.trim()
     setInput('')
     if (user) {
-      await supabase.from('messages').insert({ channel_id: activeChannel.id, user_id: user.id, content })
+      await chatService.sendMessage(activeChannel.id, user.id, content)
     }
     setSending(false)
   }

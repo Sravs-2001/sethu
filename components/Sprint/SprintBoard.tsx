@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { bugService, featureService, sprintService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import { Plus, Rocket, Calendar, Target, Bug, Sparkles } from 'lucide-react'
 import { PriorityBadge } from '@/components/ui/Badge'
@@ -117,30 +117,24 @@ export default function SprintBoard() {
     if (!project) return
     const pid = project.id
 
-    supabase.from('sprints').select('*').eq('project_id', pid).order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (data) {
-          setSprints(data)
-          setActiveSprint(data.find((s: Sprint) => s.status === 'active') ?? data[0] ?? null)
-        }
-      })
-    supabase.from('bugs').select('*, assignee:profiles(*)')
-      .eq('project_id', pid).order('created_at', { ascending: false })
-      .then(({ data }) => data && setBugs(data as any))
-    supabase.from('features').select('*, assignee:profiles(*)')
-      .eq('project_id', pid).order('created_at', { ascending: false })
-      .then(({ data }) => data && setFeatures(data as any))
+    sprintService.getByProject(pid).then(({ data }) => {
+      if (data) {
+        setSprints(data)
+        setActiveSprint(data.find((s: Sprint) => s.status === 'active') ?? data[0] ?? null)
+      }
+    })
+    bugService.getByProject(pid).then(({ data }) => data && setBugs(data as any))
+    featureService.getByProject(pid).then(({ data }) => data && setFeatures(data as any))
   }, [project?.id])
 
   async function handleCreateSprint(data: Partial<Sprint>) {
     if (!project) return
-    const { data: sprint } = await supabase.from('sprints')
-      .insert({ ...data, project_id: project.id }).select().single()
+    const { data: sprint } = await sprintService.create({ ...data, project_id: project.id })
     if (sprint) { addSprint(sprint); setActiveSprint(sprint) }
   }
 
   async function handleSprintStatusChange(sprint: Sprint, status: SprintStatus) {
-    await supabase.from('sprints').update({ status }).eq('id', sprint.id)
+    await sprintService.update(sprint.id, { status })
     updateSprint(sprint.id, { status })
     setActiveSprint({ ...sprint, status })
   }

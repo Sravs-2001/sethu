@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { authService } from '@/lib/services'
 import { X, Eye, EyeOff, CheckCircle, Bug, Rocket, MessageSquare, Sparkles } from 'lucide-react'
 import JiraLogo from '@/components/ui/JiraLogo'
 import { GoogleIcon, GitHubIcon, MicrosoftIcon } from '@/components/ui/OAuthIcons'
@@ -59,22 +59,28 @@ export default function AuthModal({ defaultMode = 'login', inviteToken, onClose 
     setError(''); setSuccess(''); setLoading('email')
 
     if (mode === 'register') {
-      const { data, error } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { name, full_name: name } },
+      // Create user server-side with email already confirmed (no confirmation email needed)
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name }),
       })
+      const body = await res.json()
+      if (!res.ok) {
+        setError(body.error ?? 'Failed to create account.')
+        setLoading(null)
+        return
+      }
+      // Now sign in immediately
+      const { data, error } = await authService.signInWithPassword(email, password)
       if (error) {
         setError(error.message)
       } else if (data.session) {
         await acceptInvite()
         window.location.href = '/dashboard'
-      } else {
-        // Email confirmation required — persist token so it's accepted after confirmation
-        if (inviteToken) localStorage.setItem('pending_invite_token', inviteToken)
-        setSuccess('Check your email to confirm your account, then sign in.')
       }
     } else {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await authService.signInWithPassword(email, password)
       if (error) {
         setError(error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message)
       } else if (data.session) {
@@ -87,12 +93,10 @@ export default function AuthModal({ defaultMode = 'login', inviteToken, onClose 
 
   async function handleOAuth(provider: 'google' | 'github' | 'azure') {
     setError(''); setLoading(provider)
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error } = await authService.signInWithOAuth(
       provider,
-      options: {
-        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/api/auth/callback` : '',
-      },
-    })
+      typeof window !== 'undefined' ? `${window.location.origin}/api/auth/callback` : undefined
+    )
     if (error) {
       setError(error.message.includes('not enabled')
         ? `${provider === 'azure' ? 'Microsoft' : provider.charAt(0).toUpperCase() + provider.slice(1)} login isn't enabled yet. Use email below.`
@@ -104,10 +108,10 @@ export default function AuthModal({ defaultMode = 'login', inviteToken, onClose 
   async function handleMagicLink() {
     if (!email) { setError('Enter your email address first.'); return }
     setError(''); setLoading('magic')
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await authService.signInWithOtp(
       email,
-      options: { emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/api/auth/callback` : '' },
-    })
+      typeof window !== 'undefined' ? `${window.location.origin}/api/auth/callback` : undefined
+    )
     if (error) setError(error.message)
     else setSuccess(`Magic link sent to ${email} — check your inbox!`)
     setLoading(null)

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { projectService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import type { Project } from '@/types'
 import ArrowheadIcon from '@/components/ui/ArrowheadIcon'
@@ -77,31 +77,14 @@ export default function CreateProject({ onCreated }: { onCreated: (p: Project) =
     setSaving(true)
     setError('')
 
-    // Create project directly with Supabase client
-    const { data, error: err } = await supabase
-      .from('projects')
-      .insert({
-        name:         name.trim(),
-        key:          key || toKey(name),
-        description:  description.trim() || null,
-        avatar_color: color,
-        created_by:   user!.id,
-      })
-      .select()
-      .single()
+    const { data, error: err } = await projectService.create({
+      name: name.trim(), key: key || toKey(name),
+      description: description.trim() || null, avatar_color: color, created_by: user!.id,
+    })
 
-    if (err) {
-      setError(err.message)
-      setSaving(false)
-      return
-    }
+    if (err) { setError(err.message); setSaving(false); return }
 
-    // Try to add creator to project_members (silent — if RLS blocks it, checkProject
-    // will still find the project via created_by fallback)
-    await supabase.from('project_members').upsert(
-      { project_id: data.id, user_id: user!.id, role: 'admin', invited_by: null },
-      { onConflict: 'project_id,user_id' }
-    )
+    await projectService.addMember(data.id, user!.id, 'admin', null)
 
     onCreated(data as Project)
   }

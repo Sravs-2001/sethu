@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { authService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import { useRouter } from 'next/navigation'
 import type { Project } from '@/types'
@@ -40,7 +40,7 @@ export default function AdminLayout({ onEnterProject, onBackToProjects }: {
   }, [userMenuOpen])
 
   async function handleLogout() {
-    await supabase.auth.signOut(); setUser(null); router.push('/')
+    await authService.signOut(); setUser(null); router.push('/')
   }
 
   return (
