@@ -160,7 +160,7 @@ function GlobalTopNav({
         {/* Logo */}
         <div className="flex items-center gap-2 px-2 mr-1 flex-shrink-0 select-none">
           <JiraLogo size={26} />
-          <span className="text-white font-black text-sm tracking-tight hidden sm:block">sethu</span>
+          <span className="sethu-brand text-white text-sm hidden sm:block">sethu</span>
         </div>
 
         {/* Nav links */}

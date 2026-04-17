@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Brand wordmark ────────────────────────────────────────────────────────── */
+.sethu-brand {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
 /* ── Design tokens ─────────────────────────────────────────────────────────── */
 :root {
   /* Surfaces */

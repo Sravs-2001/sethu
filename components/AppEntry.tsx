@@ -152,7 +152,7 @@ export default function AppEntry({ children }: { children?: React.ReactNode }) {
         <div className="flex flex-col items-center gap-4">
           <JiraLogo size={48} />
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-white font-black text-xl tracking-tight">sethu</span>
+            <span className="sethu-brand text-white text-xl">sethu</span>
           </div>
           <div className="w-5 h-5 rounded-full border-2 border-[#2684FF] border-t-transparent animate-spin mt-2" />
           <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>Loading workspace…</p>

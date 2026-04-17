@@ -16,7 +16,7 @@ function LoadingScreen() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#1D2125' }}>
       <div className="flex flex-col items-center gap-4">
         <JiraLogo size={48} />
-        <span className="text-white font-black text-xl tracking-tight">sethu</span>
+        <span className="sethu-brand text-white text-xl">sethu</span>
         <div className="w-5 h-5 rounded-full border-2 border-[#2684FF] border-t-transparent animate-spin" />
         <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>
           Loading workspace…
