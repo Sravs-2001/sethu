@@ -51,7 +51,7 @@ export default function ProjectSettings() {
     setSaving(true); setError(''); setSaved(false)
 
     const { data, error: err } = await projectService.update(proj.id, {
-      name: name.trim(), description: description.trim() || null, avatar_color: color,
+      name: name.trim(), description: description.trim() ?? undefined, avatar_color: color,
     })
 
     if (err) { setError(err.message); setSaving(false); return }
