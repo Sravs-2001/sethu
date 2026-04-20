@@ -16,14 +16,14 @@ export const authService = {
   async signInWithOAuth(provider: 'google' | 'github' | 'azure', redirectTo?: string) {
     return supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: redirectTo ?? `${window.location.origin}/dashboard` },
+      options: { redirectTo: redirectTo ?? `${window.location.origin}/api/auth/callback` },
     })
   },
 
   async signInWithOtp(email: string, redirectTo?: string) {
     return supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: redirectTo ?? `${window.location.origin}/dashboard` },
+      options: { emailRedirectTo: redirectTo ?? `${window.location.origin}/api/auth/callback` },
     })
   },
 
