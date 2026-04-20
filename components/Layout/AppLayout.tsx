@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useStore } from '@/store/useStore'
-import { projectService, chatService } from '@/lib/services'
+import { projectService, chatService, sprintService } from '@/lib/services'
 import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
 import HomeSidebar from './HomeSidebar'
@@ -67,40 +67,38 @@ function ProjectsDropdown({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="absolute left-0 top-full mt-1 w-72 bg-white rounded-lg overflow-hidden z-50"
-      style={{ border: '1px solid #DFE1E6', boxShadow: '0 8px 24px rgba(9,30,66,0.18)' }}>
-
+    <div className="absolute left-0 top-full mt-1 w-72 bg-white rounded-xl overflow-hidden z-50 border border-gray-100 shadow-xl">
       <div className="px-3 pt-3 pb-1">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-[#626F86]">Recent projects</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Recent projects</span>
       </div>
 
       {projects.slice(0, 6).map(p => (
         <button key={p.id} onClick={() => switchProject(p)}
-          className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-[#F1F2F4] transition-colors">
-          <div className="w-7 h-7 rounded flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+          className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
             style={{ backgroundColor: p.avatar_color }}>
             {p.key.slice(0,2)}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-[#172B4D] truncate">{p.name}</div>
-            <div className="text-[11px] text-[#626F86]">Software project</div>
+            <div className="text-sm font-medium text-gray-900 truncate">{p.name}</div>
+            <div className="text-[11px] text-gray-400">Software project</div>
           </div>
-          {active?.id === p.id && <Check className="w-3.5 h-3.5 text-[#0052CC] flex-shrink-0" />}
+          {active?.id === p.id && <Check className="w-3.5 h-3.5 text-gray-900 flex-shrink-0" />}
         </button>
       ))}
 
-      <div className="h-px mx-3 bg-[#DFE1E6] my-1" />
+      <div className="h-px mx-3 bg-gray-100 my-1" />
 
       <button
         onClick={() => { router.push('/dashboard/projects'); onClose() }}
-        className="flex items-center justify-between w-full px-3 py-2.5 text-sm font-medium text-[#172B4D] hover:bg-[#F1F2F4] transition-colors">
+        className="flex items-center justify-between w-full px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
         <span>View all projects</span>
-        <ChevronRight className="w-3.5 h-3.5 text-[#626F86]" />
+        <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
       </button>
 
       <button
         onClick={() => { router.push('/dashboard/projects'); onClose() }}
-        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm font-semibold text-[#0052CC] hover:bg-[#F1F2F4] transition-colors border-t border-[#F4F5F7]">
+        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors border-t border-gray-100">
         <Plus className="w-3.5 h-3.5" />
         Create project
       </button>
@@ -154,13 +152,12 @@ function GlobalTopNav({
 
   return (
     <>
-      <header className="flex-shrink-0 flex items-center px-2 h-12 z-40 gap-1"
-        style={{ background: '#1D2125', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <header className="flex-shrink-0 flex items-center px-3 h-12 z-40 gap-1 bg-gray-900 border-b border-white/5">
 
         {/* Logo */}
-        <div className="flex items-center gap-2 px-2 mr-1 flex-shrink-0 select-none">
+        <div className="flex items-center gap-1.5 px-2 mr-1 flex-shrink-0 select-none">
           <JiraLogo size={26} />
-          <span className="sethu-brand text-white text-sm hidden sm:block">sethu</span>
+          <span className="sethu-brand text-white text-base hidden sm:block">sethu</span>
         </div>
 
         {/* Nav links */}
@@ -173,10 +170,10 @@ function GlobalTopNav({
                   <button
                     onClick={() => setProjectsDropOpen(o => !o)}
                     className={clsx(
-                      'flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium transition-colors',
+                      'flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
                       projectsDropOpen
-                        ? 'bg-[rgba(255,255,255,0.16)] text-white'
-                        : 'text-[rgba(255,255,255,0.72)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white'
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/60 hover:bg-white/8 hover:text-white'
                     )}>
                     {item.label}
                     <ChevronDown className={clsx('w-3.5 h-3.5 transition-transform', projectsDropOpen && 'rotate-180')} />
@@ -191,10 +188,10 @@ function GlobalTopNav({
               <button key={item.label}
                 onClick={() => item.href && router.push(item.href)}
                 className={clsx(
-                  'px-3 py-1.5 rounded text-sm font-medium transition-colors',
+                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-[rgba(255,255,255,0.16)] text-white'
-                    : 'text-[rgba(255,255,255,0.72)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white'
+                    ? 'bg-white/10 text-white'
+                    : 'text-white/60 hover:bg-white/8 hover:text-white'
                 )}>
                 {item.label}
               </button>
@@ -209,10 +206,7 @@ function GlobalTopNav({
           {/* Create button */}
           <button
             onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold mr-1 transition-colors"
-            style={{ background: '#0052CC', color: 'white' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#0065FF'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#0052CC'}>
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold mr-1 bg-white text-gray-900 hover:bg-gray-100 transition-colors">
             <Plus className="w-3.5 h-3.5" />
             <span>Create</span>
           </button>
@@ -246,20 +240,19 @@ function GlobalTopNav({
             </button>
 
             {userMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl overflow-hidden z-50"
-                style={{ border: '1px solid #DFE1E6', boxShadow: '0 8px 24px rgba(9,30,66,0.18)' }}>
-                <div className="px-3 py-3 border-b border-[#F4F5F7]">
+              <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl overflow-hidden z-50 border border-gray-100 shadow-xl">
+                <div className="px-3 py-3 border-b border-gray-100">
                   <div className="flex items-center gap-2.5">
                     {user?.avatar_url ? (
                       <img src={user.avatar_url} alt={user.name} className="w-9 h-9 rounded-full object-cover" />
                     ) : (
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold bg-[#0052CC]">
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold bg-gray-900">
                         {user?.name?.[0]?.toUpperCase() ?? '?'}
                       </div>
                     )}
                     <div>
-                      <div className="text-sm font-semibold text-[#172B4D]">{user?.name}</div>
-                      <div className="text-xs text-[#626F86] capitalize flex items-center gap-1">
+                      <div className="text-sm font-semibold text-gray-900">{user?.name}</div>
+                      <div className="text-xs text-gray-500 capitalize flex items-center gap-1">
                         {user?.role === 'admin' && <Shield className="w-3 h-3 text-amber-500" />}
                         {user?.role}
                       </div>
@@ -268,19 +261,19 @@ function GlobalTopNav({
                 </div>
                 {onGoToAdmin && (
                   <button onClick={() => { setUserMenuOpen(false); onGoToAdmin() }}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7] transition-colors">
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
                     <Shield className="w-3.5 h-3.5 text-amber-500" />
                     Admin panel
                   </button>
                 )}
                 <button
                   onClick={() => { setUserMenuOpen(false); router.push('/dashboard/projects') }}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7] transition-colors">
-                  <Settings className="w-3.5 h-3.5 text-[#626F86]" />
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                  <Settings className="w-3.5 h-3.5 text-gray-400" />
                   Manage projects
                 </button>
                 <button onClick={() => { setUserMenuOpen(false); onSignOut() }}
-                  className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-[#DE350B] hover:bg-[#FFEBE6] transition-colors border-t border-[#F4F5F7]">
+                  className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100">
                   <LogOut className="w-3.5 h-3.5" />
                   Sign out
                 </button>
@@ -305,7 +298,7 @@ export default function AppLayout({
   onSignOut: () => void
   onGoToAdmin?: () => void
 }) {
-  const { setProfiles, setProjectMembers, setChannels, setActiveChannel, project } = useStore()
+  const { setProfiles, setProjectMembers, setChannels, setActiveChannel, setSprints, project } = useStore()
   const pathname = usePathname()
 
   useEffect(() => {
@@ -316,6 +309,10 @@ export default function AppLayout({
         setProjectMembers(data)
         setProfiles(data.map((m: any) => m.profile).filter(Boolean))
       }
+    })
+
+    sprintService.getByProject(project.id).then(({ data }) => {
+      if (data) setSprints(data)
     })
 
     chatService.getChannels().then(({ data }) => {

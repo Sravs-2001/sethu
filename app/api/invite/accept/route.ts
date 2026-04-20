@@ -49,26 +49,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'This invite link has expired' }, { status: 410 })
   }
 
-  // Ensure profile exists
-  await supabaseAdmin.from('profiles').upsert(
-    { id: user.id, name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User', role: 'member' },
+  // Ensure profile exists for new users
+  const { error: profileErr } = await supabaseAdmin.from('profiles').upsert(
+    {
+      id:   user.id,
+      name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+      role: 'member',
+    },
     { onConflict: 'id', ignoreDuplicates: true }
   )
+  if (profileErr) {
+    console.error('[invite/accept] profile upsert error:', profileErr)
+    return NextResponse.json({ error: 'Failed to create user profile: ' + profileErr.message }, { status: 500 })
+  }
 
-  // Add user to project — set invited_by so it's distinguishable from seeded entries
+  // Verify the inviter's profile exists before setting invited_by (avoids FK violation)
+  let invitedBy: string | null = inviteToken.created_by ?? null
+  if (invitedBy) {
+    const { data: inviterProfile } = await supabaseAdmin
+      .from('profiles').select('id').eq('id', invitedBy).single()
+    if (!inviterProfile) invitedBy = null
+  }
+
+  // Add user to project
   const { error: memberErr } = await supabaseAdmin
     .from('project_members')
     .upsert(
       {
         project_id: inviteToken.project_id,
-        user_id: user.id,
-        role: inviteToken.role,
-        invited_by: inviteToken.created_by,
+        user_id:    user.id,
+        role:       inviteToken.role,
+        invited_by: invitedBy,
       },
       { onConflict: 'project_id,user_id' }
     )
 
   if (memberErr) {
+    console.error('[invite/accept] project_members upsert error:', memberErr)
     return NextResponse.json({ error: memberErr.message }, { status: 500 })
   }
 

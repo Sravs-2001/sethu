@@ -127,9 +127,9 @@ export default function AuthModal({ defaultMode = 'login', inviteToken, onClose 
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <JiraLogo size={20} />
-            <span className="sethu-brand text-gray-900 text-lg">sethu</span>
+          <div className="flex items-center gap-1.5">
+            <JiraLogo size={24} />
+            <span className="sethu-brand text-gray-900 text-xl">sethu</span>
           </div>
           <button onClick={onClose}
             className="w-7 h-7 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors">

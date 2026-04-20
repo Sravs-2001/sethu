@@ -56,11 +56,10 @@ export const projectService = {
   },
 
   async getMembers(projectId: string) {
-    return supabase
-      .from('project_members')
-      .select('*, profile:profiles(*)')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: true })
+    const res = await fetch(`/api/project/members?project_id=${projectId}`)
+    const data = await res.json()
+    if (!res.ok) return { data: null, error: data }
+    return { data, error: null }
   },
 
   async removeMember(projectId: string, userId: string) {

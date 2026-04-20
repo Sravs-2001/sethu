@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { bugService } from '@/lib/services'
+import { bugService, sprintService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import {
   Plus, Trash2, List, LayoutGrid,
@@ -350,7 +350,7 @@ function DetailPanel({ bug, issueKey, onClose, onSave, onDelete }: {
 type SortField = 'title' | 'priority' | 'status' | 'created_at'
 
 export default function BugBoard() {
-  const { bugs, setBugs, addBug, updateBug, deleteBug, user, project, profiles } = useStore()
+  const { bugs, setBugs, addBug, updateBug, deleteBug, user, project, profiles, sprints, setSprints } = useStore()
 
   const [showCreate,     setShowCreate]     = useState(false)
   const [defaultStatus,  setDefaultStatus]  = useState<Status>('todo')
@@ -383,6 +383,12 @@ export default function BugBoard() {
 
     const refresh = () => bugService.getByProject(pid).then(({ data }) => data && setBugs(data as any))
     refresh()
+
+    // Load sprints so the create-issue dropdown is always populated
+    if (sprints.length === 0) {
+      sprintService.getByProject(pid).then(({ data }) => data && setSprints(data as any))
+    }
+
     return bugService.subscribe(pid, refresh)
   }, [project?.id])
 

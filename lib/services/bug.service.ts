@@ -1,15 +1,12 @@
 import { supabase } from '@/lib/supabase/client'
 import type { Bug } from '@/types'
 
-const SELECT_BUG = '*, assignee:profiles(*), reporter:profiles(*)'
-
 export const bugService = {
   async getByProject(projectId: string) {
-    return supabase
-      .from('bugs')
-      .select(SELECT_BUG)
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
+    const res = await fetch(`/api/bugs?project_id=${projectId}`)
+    const data = await res.json()
+    if (!res.ok) return { data: null, error: data }
+    return { data, error: null }
   },
 
   async getByAssignee(userId: string) {
@@ -22,26 +19,38 @@ export const bugService = {
   },
 
   async create(payload: Partial<Bug> & { project_id: string; created_by: string }) {
-    return supabase
-      .from('bugs')
-      .insert({ issue_type: 'task', tags: [], ...payload })
-      .select(SELECT_BUG)
-      .single()
+    const res = await fetch('/api/bugs', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    })
+    const data = await res.json()
+    if (!res.ok) return { data: null, error: data }
+    return { data, error: null }
   },
 
   async update(id: string, payload: Partial<Bug>) {
-    return supabase.from('bugs').update(payload).eq('id', id)
+    const res = await fetch(`/api/bugs?id=${id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    })
+    const data = await res.json()
+    if (!res.ok) return { data: null, error: data }
+    return { data, error: null }
   },
 
   async delete(id: string) {
-    return supabase.from('bugs').delete().eq('id', id)
+    const res = await fetch(`/api/bugs?id=${id}`, { method: 'DELETE' })
+    const data = await res.json()
+    if (!res.ok) return { data: null, error: data }
+    return { data, error: null }
   },
 
   async getStatsByProjects(projectIds: string[]) {
     return supabase.from('bugs').select('project_id, status, priority').in('project_id', projectIds)
   },
 
-  /** Subscribe to all changes on a project's bugs and re-fetch on each event */
   subscribe(projectId: string, onRefresh: () => void) {
     const channel = supabase
       .channel(`kanban-${projectId}`)

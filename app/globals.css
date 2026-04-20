@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Global font ───────────────────────────────────────────────────────────── */
+body {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
 /* ── Brand wordmark ────────────────────────────────────────────────────────── */
 .sethu-brand {
   font-family: 'Space Grotesk', sans-serif;
@@ -292,11 +297,31 @@
 
 /* ── Gradient utilities ──────────────────────────────────────────────────────── */
 .gradient-text {
-  background: linear-gradient(135deg, #0EA5E9 0%, #3B82F6 50%, #6366F1 100%);
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #EC4899 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+.gradient-text-blue {
+  background: linear-gradient(135deg, #3B82F6 0%, #6366F1 50%, #8B5CF6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.btn-gradient {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+         text-white text-sm font-semibold cursor-pointer select-none
+         transition-all duration-150 active:scale-[0.98];
+  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+.btn-gradient:hover {
+  background: linear-gradient(135deg, #4338CA 0%, #6D28D9 100%);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.45);
+}
+.btn-gradient:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Animations ─────────────────────────────────────────────────────────────── */
 @keyframes slideInRight  { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }

@@ -3,18 +3,31 @@ export default function JiraLogo({ size = 28, className }: { size?: number; clas
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 28 28"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
-      {/* Black background */}
-      <rect width="32" height="32" rx="8" fill="#000000" />
+      {/* Dark background — Cursor app style */}
+      <rect width="28" height="28" rx="6.5" fill="#1C1C1C" />
 
-      {/* Cursor pointer — large, centered, clean */}
+      {/* Top arrow — pointing up (bright) */}
       <path
-        d="M8 6 L8 23 L12.5 19 L16.5 26 L19.5 24.5 L15.5 18 L23 18 Z"
-        fill="white"
+        d="M5 14.5 L14 4.5 L23 14.5"
+        stroke="white"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Bottom arrow — pointing down (slightly dimmed for depth) */}
+      <path
+        d="M5 14.5 L14 23.5 L23 14.5"
+        stroke="white"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.55"
       />
     </svg>
   )

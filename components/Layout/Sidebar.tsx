@@ -8,7 +8,7 @@ import { useStore } from '@/store/useStore'
 import type { Project } from '@/types'
 import {
   LayoutGrid, Sparkles, MessageSquare, Users,
-  ChevronDown, Plus, Check, Loader2, Layers,
+  ChevronDown, Plus, Check, Loader2, Rocket,
   Settings, Shield, BarChart2, Activity,
   Lock, ChevronLeft,
 } from 'lucide-react'
@@ -143,7 +143,7 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
   const allNavItems: NavItem[] = [
     { icon: Activity,      label: 'Summary',         href: '/dashboard/summary'  },
     { icon: LayoutGrid,    label: 'Board',            href: '/dashboard/board',    badge: openBugs     || null },
-    { icon: Layers,        label: 'Backlog',          href: '/dashboard/backlog'  },
+    { icon: Rocket,        label: 'Sprints',          href: '/dashboard/backlog'  },
     { icon: Sparkles,      label: 'Features',         href: '/dashboard/features', badge: openFeatures || null },
     { icon: MessageSquare, label: 'Chat',             href: '/dashboard/chat'     },
     { icon: Users,         label: 'People',           href: '/dashboard/people'   },
@@ -178,35 +178,34 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
   if (collapsed) {
     return (
       <>
-        <aside className="w-[52px] flex-shrink-0 flex flex-col h-full bg-white"
-          style={{ borderRight: '1px solid #DFE1E6' }}>
+        <aside className="w-[52px] flex-shrink-0 flex flex-col h-full bg-white border-r border-gray-100">
           <div className="flex justify-center pt-3 pb-2">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-bold"
-              style={{ backgroundColor: project?.avatar_color ?? '#0052CC' }}>
+              style={{ backgroundColor: project?.avatar_color ?? '#374151' }}>
               {project?.key?.slice(0,2) ?? 'P'}
             </div>
           </div>
-          <div className="h-px mx-2 bg-[#DFE1E6] mb-1" />
+          <div className="h-px mx-2 bg-gray-100 mb-1" />
           <nav className="flex-1 flex flex-col items-center gap-0.5 px-1 py-1">
             {navItems.map(({ icon: Icon, label, href, badge }) => {
               const active = pathname === href
               return (
                 <Link key={label} href={href} title={label}
                   className={clsx(
-                    'relative w-9 h-9 rounded-md flex items-center justify-center transition-colors',
-                    active ? 'bg-[#E8EDFF]' : 'hover:bg-[#F1F2F4]'
+                    'relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors',
+                    active ? 'bg-gray-100' : 'hover:bg-gray-50'
                   )}>
-                  <Icon className={clsx('w-4 h-4', active ? 'text-[#0052CC]' : 'text-[#44546F]')} />
+                  <Icon className={clsx('w-4 h-4', active ? 'text-gray-900' : 'text-gray-400')} />
                   {badge != null && (
-                    <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-[#DE350B]" />
+                    <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500" />
                   )}
                 </Link>
               )
             })}
           </nav>
-          <div className="p-1.5 border-t border-[#DFE1E6] flex justify-center">
+          <div className="p-1.5 border-t border-gray-100 flex justify-center">
             <button onClick={() => setCollapsed(false)} title="Expand sidebar"
-              className="w-8 h-8 rounded flex items-center justify-center text-[#44546F] hover:bg-[#F1F2F4]">
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-50">
               <ChevronLeft className="w-4 h-4 rotate-180" />
             </button>
           </div>
@@ -221,66 +220,64 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
   // ── Expanded sidebar ─────────────────────────────────────────────
   return (
     <>
-      <aside className="w-[240px] flex-shrink-0 flex flex-col h-full bg-white"
-        style={{ borderRight: '1px solid #DFE1E6' }}>
+      <aside className="w-[240px] flex-shrink-0 flex flex-col h-full bg-white border-r border-gray-100">
 
         {/* ── Project Switcher ── */}
         <div className="px-3 pt-3 pb-2 relative" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen(o => !o)}
             className={clsx(
-              'flex items-center gap-2 w-full px-2 py-2 rounded-md text-left transition-colors hover:bg-[#F1F2F4]',
-              dropdownOpen && 'bg-[#F1F2F4]'
+              'flex items-center gap-2 w-full px-2 py-2 rounded-xl text-left transition-colors hover:bg-gray-50',
+              dropdownOpen && 'bg-gray-50'
             )}>
             <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-              style={{ backgroundColor: project?.avatar_color ?? '#0052CC' }}>
+              style={{ backgroundColor: project?.avatar_color ?? '#374151' }}>
               {project?.key?.slice(0,2) ?? 'P'}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <div className="text-sm font-semibold text-[#172B4D] truncate leading-tight">
+                <div className="text-sm font-semibold text-gray-900 truncate leading-tight">
                   {project?.name ?? 'My Project'}
                 </div>
-                <span title="Private project"><Lock className="w-3 h-3 text-[#626F86] flex-shrink-0" /></span>
+                <span title="Private project"><Lock className="w-3 h-3 text-gray-400 flex-shrink-0" /></span>
               </div>
-              <div className="text-[11px] text-[#626F86] leading-tight">
+              <div className="text-[11px] text-gray-400 leading-tight">
                 {project?.key ?? 'PROJ'} · Software project
               </div>
             </div>
             <ChevronDown className={clsx(
-              'w-3.5 h-3.5 flex-shrink-0 text-[#626F86] transition-transform duration-150',
+              'w-3.5 h-3.5 flex-shrink-0 text-gray-400 transition-transform duration-150',
               dropdownOpen && 'rotate-180'
             )} />
           </button>
 
           {dropdownOpen && (
-            <div className="absolute left-0 right-0 mx-3 top-full mt-1 bg-white rounded-lg overflow-hidden z-50"
-              style={{ border: '1px solid #DFE1E6', boxShadow: '0 8px 24px rgba(9,30,66,0.15)' }}>
+            <div className="absolute left-0 right-0 mx-3 top-full mt-1 bg-white rounded-xl overflow-hidden z-50 border border-gray-100 shadow-xl">
               {projects.length > 0 && (
                 <>
                   <div className="px-3 pt-2.5 pb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#626F86]">Your projects</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Your projects</span>
                   </div>
                   <div className="max-h-48 overflow-y-auto">
                     {projects.map(p => (
                       <button key={p.id} onClick={() => switchProject(p)}
-                        className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-[#F1F2F4] transition-colors">
-                        <div className="w-6 h-6 rounded flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                        className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors">
+                        <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
                           style={{ backgroundColor: p.avatar_color }}>
                           {p.key.slice(0,2)}
                         </div>
-                        <span className="text-sm flex-1 truncate font-medium text-[#172B4D]">{p.name}</span>
-                        <Lock className="w-3 h-3 text-[#B3BAC5] flex-shrink-0" />
-                        {project?.id === p.id && <Check className="w-3.5 h-3.5 flex-shrink-0 text-[#0052CC]" />}
+                        <span className="text-sm flex-1 truncate font-medium text-gray-900">{p.name}</span>
+                        <Lock className="w-3 h-3 text-gray-300 flex-shrink-0" />
+                        {project?.id === p.id && <Check className="w-3.5 h-3.5 flex-shrink-0 text-gray-900" />}
                       </button>
                     ))}
                   </div>
-                  <div className="h-px mx-3 bg-[#DFE1E6]" />
+                  <div className="h-px mx-3 bg-gray-100" />
                 </>
               )}
               <button
                 onClick={() => { setDropdownOpen(false); setShowNewProject(true) }}
-                className="flex items-center gap-2 w-full px-3 py-2.5 text-sm font-semibold text-[#0052CC] hover:bg-[#F1F2F4] transition-colors">
+                className="flex items-center gap-2 w-full px-3 py-2.5 text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors">
                 <Plus className="w-3.5 h-3.5" />
                 Create new project
               </button>
@@ -291,16 +288,16 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
         {/* Role badge */}
         <div className="px-5 pb-2">
           <span className={clsx(
-            'inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full',
+            'inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border',
             isProjectAdmin
-              ? 'bg-[#FFFAE6] text-amber-700 border border-amber-200'
-              : 'bg-[#F4F5F7] text-[#626F86] border border-[#DFE1E6]'
+              ? 'bg-amber-50 text-amber-700 border-amber-200'
+              : 'bg-gray-50 text-gray-500 border-gray-200'
           )}>
             {isProjectAdmin ? <><Shield className="w-2.5 h-2.5" /> Admin</> : <><Users className="w-2.5 h-2.5" /> Member</>}
           </span>
         </div>
 
-        <div className="h-px mx-3 bg-[#DFE1E6] mb-1" />
+        <div className="h-px mx-3 bg-gray-100 mb-1" />
 
         {/* ── Navigation ── */}
         <nav className="flex-1 overflow-y-auto px-2 py-1">
@@ -311,20 +308,20 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
               return (
                 <Link key={label} href={href}
                   className={clsx(
-                    'relative flex items-center gap-3 w-full px-3 py-1.5 rounded-md text-sm transition-colors text-left',
+                    'relative flex items-center gap-3 w-full px-3 py-1.5 rounded-lg text-sm transition-colors text-left',
                     active
-                      ? 'bg-[#E8EDFF] text-[#0052CC] font-semibold'
-                      : 'text-[#44546F] hover:bg-[#F1F2F4] font-medium'
+                      ? 'bg-gray-100 text-gray-900 font-semibold'
+                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium'
                   )}>
                   {active && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-[#0052CC]" />
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-gray-900" />
                   )}
-                  <Icon className={clsx('w-4 h-4 flex-shrink-0', active ? 'text-[#0052CC]' : 'text-[#626F86]')} />
+                  <Icon className={clsx('w-4 h-4 flex-shrink-0', active ? 'text-gray-900' : 'text-gray-400')} />
                   <span className="flex-1 truncate">{label}</span>
                   {badge != null && (
                     <span className={clsx(
                       'min-w-[18px] h-[18px] text-[10px] font-bold rounded-full flex items-center justify-center px-1',
-                      active ? 'bg-[#0052CC] text-white' : 'bg-[#DFE1E6] text-[#44546F]'
+                      active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'
                     )}>
                       {badge > 99 ? '99+' : badge}
                     </span>
@@ -338,7 +335,7 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
           {isProjectAdmin && (
             <>
               <div className="px-3 mb-1 mt-3">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#97A0AF] flex items-center gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-300 flex items-center gap-1">
                   <Shield className="w-2.5 h-2.5" /> Admin
                 </span>
               </div>
@@ -348,22 +345,22 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
                   return (
                     <Link key={label} href={href}
                       className={clsx(
-                        'relative flex items-center gap-3 w-full px-3 py-1.5 rounded-md text-sm transition-colors text-left',
+                        'relative flex items-center gap-3 w-full px-3 py-1.5 rounded-lg text-sm transition-colors text-left',
                         active
-                          ? 'bg-[#FFFAE6] text-amber-700 font-semibold'
-                          : 'text-[#44546F] hover:bg-[#F1F2F4] font-medium'
+                          ? 'bg-gray-100 text-gray-900 font-semibold'
+                          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium'
                       )}>
                       {active && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-amber-400" />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-gray-900" />
                       )}
-                      <Icon className={clsx('w-4 h-4 flex-shrink-0', active ? 'text-amber-600' : 'text-[#626F86]')} />
+                      <Icon className={clsx('w-4 h-4 flex-shrink-0', active ? 'text-gray-900' : 'text-gray-400')} />
                       <span className="flex-1 truncate">{label}</span>
                     </Link>
                   )
                 })}
                 {isSiteAdmin && onGoToAdmin && (
                   <button onClick={onGoToAdmin}
-                    className="relative flex items-center gap-3 w-full px-3 py-1.5 rounded-md text-sm text-[#44546F] hover:bg-[#F1F2F4] font-medium transition-colors text-left">
+                    className="relative flex items-center gap-3 w-full px-3 py-1.5 rounded-lg text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium transition-colors text-left">
                     <Shield className="w-4 h-4 flex-shrink-0 text-amber-500" />
                     <span>Site admin panel</span>
                   </button>
@@ -374,11 +371,11 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
         </nav>
 
         {/* ── Collapse button ── */}
-        <div className="border-t border-[#DFE1E6] p-2">
+        <div className="border-t border-gray-100 p-2">
           <button onClick={() => setCollapsed(true)}
-            className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-[#626F86] hover:bg-[#F1F2F4] transition-colors">
+            className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-50 hover:text-gray-700 transition-colors">
             <ChevronLeft className="w-4 h-4" />
-            <span>Collapse sidebar</span>
+            <span>Collapse</span>
           </button>
         </div>
       </aside>

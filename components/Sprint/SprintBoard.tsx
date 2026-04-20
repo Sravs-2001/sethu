@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { bugService, featureService, sprintService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
-import { Plus, Rocket, Calendar, Target, Bug, Sparkles } from 'lucide-react'
+import { Plus, Rocket, Calendar, Target, Bug, Sparkles, Lock, Database } from 'lucide-react'
 import { PriorityBadge } from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import { STATUSES, STATUS_CONFIG, SPRINT_STATUS_CONFIG, colors } from '@/lib/constants'
@@ -103,15 +103,34 @@ function SprintForm({ onSave, onClose }: {
   )
 }
 
+// ── Sample bug titles for seed data ──────────────────────────────────────────
+
+const SEED_BUGS = [
+  { title: 'Login page throws 500 on invalid credentials',      issue_type: 'bug'   as const, priority: 'critical' as const, status: 'todo'        as const },
+  { title: 'Implement JWT refresh token rotation',              issue_type: 'task'  as const, priority: 'high'     as const, status: 'in_progress'  as const },
+  { title: 'Dashboard loads slowly on low-end devices',         issue_type: 'bug'   as const, priority: 'medium'   as const, status: 'todo'         as const },
+  { title: 'Add dark mode support to settings page',            issue_type: 'story' as const, priority: 'low'      as const, status: 'todo'         as const },
+  { title: 'Write unit tests for auth middleware',              issue_type: 'task'  as const, priority: 'medium'   as const, status: 'review'       as const },
+  { title: 'Fix SQL injection vulnerability in search query',   issue_type: 'bug'   as const, priority: 'critical' as const, status: 'done'         as const },
+  { title: 'Upgrade React from 18 to 19',                      issue_type: 'task'  as const, priority: 'high'     as const, status: 'todo'         as const },
+]
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function SprintBoard() {
   const {
     sprints, setSprints, addSprint, updateSprint,
-    bugs, setBugs, features, setFeatures, project,
+    bugs, setBugs, addBug, features, setFeatures, project,
+    user, projectMembers,
   } = useStore()
   const [showCreate,   setShowCreate]   = useState(false)
   const [activeSprint, setActiveSprint] = useState<Sprint | null>(null)
+  const [seeding,      setSeeding]      = useState(false)
+
+  const isProjectAdmin =
+    user?.role === 'admin' ||
+    projectMembers.some(m => m.user_id === user?.id && m.role === 'admin') ||
+    project?.created_by === user?.id
 
   useEffect(() => {
     if (!project) return
@@ -128,15 +147,46 @@ export default function SprintBoard() {
   }, [project?.id])
 
   async function handleCreateSprint(data: Partial<Sprint>) {
-    if (!project) return
+    if (!project || !isProjectAdmin) return
     const { data: sprint } = await sprintService.create({ ...data, project_id: project.id })
     if (sprint) { addSprint(sprint); setActiveSprint(sprint) }
   }
 
   async function handleSprintStatusChange(sprint: Sprint, status: SprintStatus) {
+    if (!isProjectAdmin) return
     await sprintService.update(sprint.id, { status })
     updateSprint(sprint.id, { status })
     setActiveSprint({ ...sprint, status })
+  }
+
+  async function handleSeedSampleData() {
+    if (!project || !user || !isProjectAdmin) return
+    setSeeding(true)
+    const today     = new Date()
+    const twoWeeks  = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000)
+    const { data: sprint } = await sprintService.create({
+      project_id: project.id,
+      name:       'Sprint 1 · Q2 2026',
+      goal:       'Ship core auth flow, fix critical bugs, and set up test coverage',
+      start_date: today.toISOString().split('T')[0],
+      end_date:   twoWeeks.toISOString().split('T')[0],
+      status:     'active',
+    })
+    if (sprint) {
+      addSprint(sprint)
+      setActiveSprint(sprint)
+      for (const bug of SEED_BUGS) {
+        const { data: created } = await bugService.create({
+          ...bug,
+          project_id: project.id,
+          created_by: user.id,
+          sprint_id:  sprint.id,
+          tags:       [],
+        })
+        if (created) addBug(created as any)
+      }
+    }
+    setSeeding(false)
   }
 
   const sprintBugs     = activeSprint ? bugs.filter(b => b.sprint_id === activeSprint.id)     : []
@@ -163,9 +213,11 @@ export default function SprintBoard() {
             {sprints.length} {sprints.length === 1 ? 'sprint' : 'sprints'}
           </p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary ml-auto">
-          <Plus className="w-3.5 h-3.5" /> Create sprint
-        </button>
+        {isProjectAdmin && (
+          <button onClick={() => setShowCreate(true)} className="btn-primary ml-auto">
+            <Plus className="w-3.5 h-3.5" /> Create sprint
+          </button>
+        )}
       </div>
 
       <div className="flex gap-4">
@@ -203,13 +255,34 @@ export default function SprintBoard() {
           {!activeSprint ? (
             <div className="bg-white rounded p-12 text-center"
               style={{ border: `1px solid ${colors.border}`, boxShadow: '0 1px 2px rgba(9,30,66,0.08)' }}>
-              <Rocket className="w-8 h-8 mx-auto mb-3" style={{ color: colors.textPlaceholder }} />
-              <p className="text-sm mb-4" style={{ color: colors.textSecondary }}>
-                Create your first sprint to get started
-              </p>
-              <button onClick={() => setShowCreate(true)} className="btn-primary mx-auto">
-                <Plus className="w-3.5 h-3.5" /> Create sprint
-              </button>
+              {isProjectAdmin ? (
+                <>
+                  <Rocket className="w-8 h-8 mx-auto mb-3" style={{ color: colors.textPlaceholder }} />
+                  <p className="text-sm mb-4" style={{ color: colors.textSecondary }}>
+                    Create your first sprint to get started
+                  </p>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button onClick={() => setShowCreate(true)} className="btn-primary">
+                      <Plus className="w-3.5 h-3.5" /> Create sprint
+                    </button>
+                    <button onClick={handleSeedSampleData} disabled={seeding}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold border transition-colors disabled:opacity-50"
+                      style={{ borderColor: colors.border, color: colors.textSecondary }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = colors.surfaceLight}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
+                      <Database className="w-3.5 h-3.5" />
+                      {seeding ? 'Seeding…' : 'Load sample sprint & bugs'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-8 h-8 mx-auto mb-3" style={{ color: colors.textPlaceholder }} />
+                  <p className="text-sm" style={{ color: colors.textSecondary }}>
+                    No sprints yet. Ask your project admin to create one.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <>
@@ -238,20 +311,22 @@ export default function SprintBoard() {
                     </div>
                   </div>
 
-                  <div className="flex gap-1.5 flex-wrap">
-                    {(Object.keys(SPRINT_STATUS_CONFIG) as SprintStatus[]).map(s => (
-                      <button key={s} onClick={() => handleSprintStatusChange(activeSprint, s)}
-                        className="text-xs px-2.5 py-1 rounded font-medium border transition-colors"
-                        style={activeSprint.status === s
-                          ? { background: colors.blue, color: colors.white, borderColor: colors.blue }
-                          : { color: colors.textMuted, borderColor: colors.border }
-                        }
-                        onMouseEnter={e => { if (activeSprint.status !== s) (e.currentTarget as HTMLElement).style.background = colors.surfaceLight }}
-                        onMouseLeave={e => { if (activeSprint.status !== s) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
-                        {SPRINT_STATUS_CONFIG[s].label}
-                      </button>
-                    ))}
-                  </div>
+                  {isProjectAdmin && (
+                    <div className="flex gap-1.5 flex-wrap">
+                      {(Object.keys(SPRINT_STATUS_CONFIG) as SprintStatus[]).map(s => (
+                        <button key={s} onClick={() => handleSprintStatusChange(activeSprint, s)}
+                          className="text-xs px-2.5 py-1 rounded font-medium border transition-colors"
+                          style={activeSprint.status === s
+                            ? { background: colors.blue, color: colors.white, borderColor: colors.blue }
+                            : { color: colors.textMuted, borderColor: colors.border }
+                          }
+                          onMouseEnter={e => { if (activeSprint.status !== s) (e.currentTarget as HTMLElement).style.background = colors.surfaceLight }}
+                          onMouseLeave={e => { if (activeSprint.status !== s) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
+                          {SPRINT_STATUS_CONFIG[s].label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Progress bar */}

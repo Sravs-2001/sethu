@@ -3,23 +3,39 @@ import type { Sprint } from '@/types'
 
 export const sprintService = {
   async getByProject(projectId: string) {
-    return supabase
-      .from('sprints')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
+    const res = await fetch(`/api/sprints?project_id=${projectId}`)
+    const data = await res.json()
+    if (!res.ok) return { data: null, error: data }
+    return { data, error: null }
   },
 
   async create(payload: Partial<Sprint> & { project_id: string }) {
-    return supabase.from('sprints').insert(payload).select().single()
+    const res = await fetch('/api/sprints', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    })
+    const data = await res.json()
+    if (!res.ok) return { data: null, error: data }
+    return { data, error: null }
   },
 
   async update(id: string, payload: Partial<Sprint>) {
-    return supabase.from('sprints').update(payload).eq('id', id)
+    const res = await fetch(`/api/sprints?id=${id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    })
+    const data = await res.json()
+    if (!res.ok) return { data: null, error: data }
+    return { data, error: null }
   },
 
   async delete(id: string) {
-    return supabase.from('sprints').delete().eq('id', id)
+    const res = await fetch(`/api/sprints?id=${id}`, { method: 'DELETE' })
+    const data = await res.json()
+    if (!res.ok) return { data: null, error: data }
+    return { data, error: null }
   },
 
   async getStatsByProjects(projectIds: string[]) {

@@ -59,7 +59,7 @@ function BoardPreview() {
       <div className="relative rounded-2xl overflow-hidden bg-white border border-gray-200 shadow-2xl">
         {/* Topbar */}
         <div className="flex items-center gap-2 px-4 h-11 border-b border-gray-100 bg-white">
-          <JiraLogo size={22} />
+          <JiraLogo size={20} />
           <div className="flex-1 min-w-0">
             <span className="text-gray-900 text-[11px] font-bold">sethu</span>
             <span className="text-gray-400 text-[9px] ml-1">/ Mobile App</span>
@@ -167,7 +167,7 @@ export default function LandingPage() {
         .lp-ticker-track { animation: lp-ticker 28s linear infinite }
         .lp-ticker-track:hover { animation-play-state: paused }
         .lp-shimmer-text {
-          background: linear-gradient(90deg, #111 0%, #555 40%, #111 60%, #555 100%);
+          background: linear-gradient(90deg, #4F46E5 0%, #7C3AED 30%, #EC4899 55%, #7C3AED 80%, #4F46E5 100%);
           background-size: 200% auto;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
@@ -220,9 +220,9 @@ export default function LandingPage() {
 
         {/* ── Navbar ── */}
         <nav className="sticky top-0 z-50 flex items-center justify-between px-6 h-14 bg-white/80 border-b border-gray-100 backdrop-blur-md">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5">
             <JiraLogo size={28} />
-            <span className="sethu-brand text-gray-900 text-base">sethu</span>
+            <span className="sethu-brand text-gray-900 text-xl">sethu</span>
           </div>
           <div className="hidden md:flex items-center gap-1">
             {['Features','How it works'].map(l => (
@@ -469,9 +469,9 @@ export default function LandingPage() {
         {/* ── Footer ── */}
         <footer className="relative px-6 py-6 border-t border-gray-100 bg-white">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <JiraLogo size={22} />
-              <span className="sethu-brand text-gray-900 text-sm">sethu</span>
+            <div className="flex items-center gap-1.5">
+              <JiraLogo size={24} />
+              <span className="sethu-brand text-gray-900 text-base">sethu</span>
             </div>
             <p className="text-xs text-gray-400">© {new Date().getFullYear()} Sethu. Built for teams who ship.</p>
             <div className="flex items-center gap-5">
