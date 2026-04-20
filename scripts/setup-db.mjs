@@ -17,10 +17,8 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const ACCESS_TOKEN = process.env.SUPABASE_ACCESS_TOKEN
 
 if (!SUPABASE_URL || !ACCESS_TOKEN) {
-  console.error('\n❌  Missing env vars in .env.local:')
-  if (!SUPABASE_URL) console.error('   NEXT_PUBLIC_SUPABASE_URL  — your Supabase project URL')
-  if (!ACCESS_TOKEN) console.error('   SUPABASE_ACCESS_TOKEN     — Supabase Dashboard → Account → Access Tokens')
-  process.exit(1)
+  console.warn('\n⚠️  Skipping DB setup (SUPABASE_ACCESS_TOKEN not set)\n')
+  process.exit(0)
 }
 
 // Extract project ref from URL: https://XXXX.supabase.co → XXXX
