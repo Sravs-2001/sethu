@@ -63,15 +63,24 @@ create table if not exists public.bugs (
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
+-- Ensure all columns exist on pre-existing tables before indexes reference them
+alter table public.bugs add column if not exists project_id   uuid references public.projects(id) on delete cascade;
+alter table public.bugs add column if not exists description  text not null default '';
+alter table public.bugs add column if not exists priority     text not null default 'medium';
+alter table public.bugs add column if not exists status       text not null default 'todo';
+alter table public.bugs add column if not exists issue_type   text not null default 'bug';
+alter table public.bugs add column if not exists assignee_id  uuid references public.profiles(id) on delete set null;
+alter table public.bugs add column if not exists sprint_id    uuid;
+alter table public.bugs add column if not exists created_by   uuid references public.profiles(id) on delete set null;
+alter table public.bugs add column if not exists tags         text[] not null default '{}';
+alter table public.bugs add column if not exists due_date     text default null;
+alter table public.bugs add column if not exists sort_order   integer not null default 0;
+alter table public.bugs add column if not exists created_at   timestamptz not null default now();
+alter table public.bugs add column if not exists updated_at   timestamptz not null default now();
 create index if not exists bugs_project_id_idx  on public.bugs(project_id);
 create index if not exists bugs_assignee_id_idx on public.bugs(assignee_id);
 create index if not exists bugs_sprint_id_idx   on public.bugs(sprint_id);
 alter table public.bugs enable row level security;
-
--- Add any missing columns to existing bugs table (safe on fresh DB too)
-alter table public.bugs add column if not exists issue_type  text not null default 'bug';
-alter table public.bugs add column if not exists due_date    text default null;
-alter table public.bugs add column if not exists sort_order  integer not null default 0;
 
 -- ── 5. features ──────────────────────────────────────────────
 create table if not exists public.features (
@@ -87,6 +96,14 @@ create table if not exists public.features (
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
+alter table public.features add column if not exists project_id   uuid references public.projects(id) on delete cascade;
+alter table public.features add column if not exists description  text not null default '';
+alter table public.features add column if not exists priority     text not null default 'medium';
+alter table public.features add column if not exists status       text not null default 'todo';
+alter table public.features add column if not exists assignee_id  uuid references public.profiles(id) on delete set null;
+alter table public.features add column if not exists sprint_id    uuid;
+alter table public.features add column if not exists created_by   uuid references public.profiles(id) on delete set null;
+alter table public.features add column if not exists updated_at   timestamptz not null default now();
 create index if not exists features_project_id_idx on public.features(project_id);
 alter table public.features enable row level security;
 
@@ -101,6 +118,11 @@ create table if not exists public.sprints (
   status       text        not null default 'planning' check (status in ('planning','active','completed')),
   created_at   timestamptz not null default now()
 );
+alter table public.sprints add column if not exists project_id  uuid references public.projects(id) on delete cascade;
+alter table public.sprints add column if not exists goal        text;
+alter table public.sprints add column if not exists start_date  text not null default '';
+alter table public.sprints add column if not exists end_date    text not null default '';
+alter table public.sprints add column if not exists status      text not null default 'planning';
 create index if not exists sprints_project_id_idx on public.sprints(project_id);
 alter table public.sprints enable row level security;
 
