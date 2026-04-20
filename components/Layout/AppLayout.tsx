@@ -137,7 +137,7 @@ function GlobalTopNav({
   // Keyboard shortcut: 'c' to create
   useEffect(() => {
     function handler(e: KeyboardEvent) {
-      if (e.key === 'c' && !e.metaKey && !e.ctrlKey && !['INPUT','TEXTAREA'].includes((e.target as Element)?.tagName))
+      if (e.key === 'c' && !e.metaKey && !e.ctrlKey && !['INPUT','TEXTAREA'].includes((e.target as Element)?.tagName) && !document.querySelector('[data-modal]'))
         setCreateOpen(true)
     }
     document.addEventListener('keydown', handler)

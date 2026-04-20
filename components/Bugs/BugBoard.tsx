@@ -398,6 +398,8 @@ export default function BugBoard() {
     function handler(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
+      // Don't fire shortcuts when a modal overlay is open
+      if (document.querySelector('[data-modal]')) return
       if (e.key === 'c' && !e.ctrlKey && !e.metaKey) {
         setDefaultStatus('todo')
         setShowCreate(true)

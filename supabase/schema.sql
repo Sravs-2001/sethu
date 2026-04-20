@@ -210,21 +210,60 @@ alter table public.notifications enable row level security;
 -- ════════════════════════════════════════════════════════════
 -- PHASE 2 — HELPER FUNCTIONS (must come before all policies)
 -- ════════════════════════════════════════════════════════════
--- These run as the DB owner (security definer) so they can query
--- project_members without triggering the same RLS policy, breaking
--- every possible direct/mutual recursion loop.
-
+-- Helper functions with row_security = off to bypass RLS inside the function.
+-- set row_security = off requires the function owner (postgres) to be superuser.
 create or replace function public.my_project_ids()
-returns setof uuid language sql security definer stable as $$
+returns setof uuid language sql security definer set row_security = off stable as $$
   select project_id from public.project_members where user_id = auth.uid()
 $$;
 
 create or replace function public.is_project_admin(pid uuid)
-returns boolean language sql security definer stable as $$
+returns boolean language sql security definer set row_security = off stable as $$
   select exists (
     select 1 from public.project_members
     where project_id = pid and user_id = auth.uid() and role = 'admin'
   )
+$$;
+
+-- RPC for listing all members of a project.
+-- Bypasses RLS so non-creator members can also see teammates.
+-- Caller must be a member of the project (enforced inside the function).
+create or replace function public.get_project_members(p_project_id uuid)
+returns table (
+  id          uuid,
+  project_id  uuid,
+  user_id     uuid,
+  role        text,
+  invited_by  uuid,
+  created_at  timestamptz,
+  profile     jsonb
+)
+language sql
+security definer
+set row_security = off
+set search_path = public
+as $$
+  select
+    pm.id,
+    pm.project_id,
+    pm.user_id,
+    pm.role::text,
+    pm.invited_by,
+    pm.created_at,
+    jsonb_build_object(
+      'id',         pr.id,
+      'name',       pr.name,
+      'avatar_url', pr.avatar_url,
+      'role',       pr.role::text
+    ) as profile
+  from project_members pm
+  join profiles pr on pr.id = pm.user_id
+  where pm.project_id = p_project_id
+    and exists (
+      select 1 from project_members
+      where project_id = p_project_id and user_id = auth.uid()
+    )
+  order by pm.created_at asc
 $$;
 
 -- ════════════════════════════════════════════════════════════
@@ -233,15 +272,10 @@ $$;
 
 -- profiles ────────────────────────────────────────────────────
 drop policy if exists "profiles_select" on public.profiles;
+-- Allow any authenticated user to see all profiles (internal team tool).
+-- Avoids the recursion chain: profiles → project_members → pm_select → project_members
 create policy "profiles_select" on public.profiles
-  for select to authenticated using (
-    id = auth.uid()
-    or id in (
-      -- see teammates: any profile that shares a project with you
-      select user_id from public.project_members
-      where project_id in (select public.my_project_ids())
-    )
-  );
+  for select to authenticated using (true);
 
 drop policy if exists "profiles_insert" on public.profiles;
 create policy "profiles_insert" on public.profiles
@@ -253,10 +287,11 @@ create policy "profiles_update" on public.profiles
 
 -- projects ────────────────────────────────────────────────────
 drop policy if exists "projects_select" on public.projects;
+-- Inline subquery on project_members is safe because pm_select is now non-recursive
 create policy "projects_select" on public.projects
   for select to authenticated using (
     created_by = auth.uid()
-    or id in (select public.my_project_ids())
+    or id in (select project_id from public.project_members where user_id = auth.uid())
   );
 
 drop policy if exists "projects_insert" on public.projects;
@@ -267,7 +302,10 @@ drop policy if exists "projects_update" on public.projects;
 create policy "projects_update" on public.projects
   for update to authenticated using (
     created_by = auth.uid()
-    or public.is_project_admin(id)
+    or exists (
+      select 1 from public.project_members
+      where project_id = id and user_id = auth.uid() and role = 'admin'
+    )
   );
 
 drop policy if exists "projects_delete" on public.projects;
@@ -276,60 +314,57 @@ create policy "projects_delete" on public.projects
 
 -- project_members ─────────────────────────────────────────────
 drop policy if exists "pm_select" on public.project_members;
+-- IMPORTANT: must stay simple (user_id = auth.uid() only) to prevent recursion.
+-- All other policies that query project_members rely on this not calling back into itself.
+-- Use get_project_members() RPC to list all members of a project.
 create policy "pm_select" on public.project_members
-  for select to authenticated using (
-    user_id = auth.uid()
-    or project_id in (select public.my_project_ids())
-  );
+  for select to authenticated using (user_id = auth.uid());
 
 drop policy if exists "pm_insert" on public.project_members;
 create policy "pm_insert" on public.project_members
   for insert to authenticated with check (
-    exists (select 1 from public.projects where id = project_id and created_by = auth.uid())
-    or public.is_project_admin(project_id)
-    or user_id = auth.uid()
+    user_id = auth.uid()
+    or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "pm_update" on public.project_members;
 create policy "pm_update" on public.project_members
   for update to authenticated using (
-    exists (select 1 from public.projects where id = project_id and created_by = auth.uid())
-    or public.is_project_admin(project_id)
+    project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "pm_delete" on public.project_members;
 create policy "pm_delete" on public.project_members
   for delete to authenticated using (
-    exists (select 1 from public.projects where id = project_id and created_by = auth.uid())
-    or public.is_project_admin(project_id)
+    project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 -- bugs ────────────────────────────────────────────────────────
 drop policy if exists "bugs_select" on public.bugs;
 create policy "bugs_select" on public.bugs
   for select to authenticated using (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "bugs_insert" on public.bugs;
 create policy "bugs_insert" on public.bugs
   for insert to authenticated with check (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "bugs_update" on public.bugs;
 create policy "bugs_update" on public.bugs
   for update to authenticated using (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "bugs_delete" on public.bugs;
 create policy "bugs_delete" on public.bugs
   for delete to authenticated using (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
@@ -337,28 +372,28 @@ create policy "bugs_delete" on public.bugs
 drop policy if exists "features_select" on public.features;
 create policy "features_select" on public.features
   for select to authenticated using (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "features_insert" on public.features;
 create policy "features_insert" on public.features
   for insert to authenticated with check (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "features_update" on public.features;
 create policy "features_update" on public.features
   for update to authenticated using (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "features_delete" on public.features;
 create policy "features_delete" on public.features
   for delete to authenticated using (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
@@ -366,28 +401,28 @@ create policy "features_delete" on public.features
 drop policy if exists "sprints_select" on public.sprints;
 create policy "sprints_select" on public.sprints
   for select to authenticated using (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "sprints_insert" on public.sprints;
 create policy "sprints_insert" on public.sprints
   for insert to authenticated with check (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "sprints_update" on public.sprints;
 create policy "sprints_update" on public.sprints
   for update to authenticated using (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
 drop policy if exists "sprints_delete" on public.sprints;
 create policy "sprints_delete" on public.sprints
   for delete to authenticated using (
-    project_id in (select public.my_project_ids())
+    project_id in (select project_id from public.project_members where user_id = auth.uid())
     or project_id in (select id from public.projects where created_by = auth.uid())
   );
 
@@ -507,6 +542,40 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- Auto-add project creator to project_members as admin
+create or replace function public.handle_new_project()
+returns trigger language plpgsql security definer set row_security = off as $$
+begin
+  -- Ensure profile exists before inserting into project_members (FK constraint)
+  insert into public.profiles (id, name, role)
+  values (new.created_by, split_part((select email from auth.users where id = new.created_by), '@', 1), 'member')
+  on conflict (id) do nothing;
+
+  insert into public.project_members (project_id, user_id, role)
+  values (new.id, new.created_by, 'admin')
+  on conflict (project_id, user_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_project_created on public.projects;
+create trigger on_project_created
+  after insert on public.projects
+  for each row execute procedure public.handle_new_project();
+
+-- Backfill: add any existing project creators who are missing from project_members
+-- Only insert when the creator's profile exists (foreign key constraint)
+insert into public.project_members (project_id, user_id, role)
+select p.id, p.created_by, 'admin'
+from public.projects p
+where p.created_by is not null
+  and exists (select 1 from public.profiles where id = p.created_by)
+  and not exists (
+    select 1 from public.project_members pm
+    where pm.project_id = p.id and pm.user_id = p.created_by
+  )
+on conflict (project_id, user_id) do nothing;
 
 -- updated_at function
 create or replace function public.update_updated_at_column()

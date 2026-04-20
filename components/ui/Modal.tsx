@@ -23,12 +23,16 @@ export default function Modal({ title, onClose, children, size = 'md' }: ModalPr
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+      data-modal
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className={`bg-white w-full ${widths[size]} rounded animate-slide-in overflow-hidden`}
-        style={{ boxShadow: '0 8px 24px rgba(9,30,66,0.25)', animationName: 'slideIn' }}>
+      <div
+        className={`bg-white w-full ${widths[size]} rounded animate-slide-in flex flex-col`}
+        style={{ boxShadow: '0 8px 24px rgba(9,30,66,0.25)', maxHeight: '90vh' }}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #DFE1E6' }}>
+        <div className="flex items-center justify-between px-6 py-4 flex-shrink-0" style={{ borderBottom: '1px solid #DFE1E6' }}>
           <h3 className="text-base font-semibold" style={{ color: '#172B4D' }}>{title}</h3>
           <button
             onClick={onClose}
@@ -41,7 +45,7 @@ export default function Modal({ title, onClose, children, size = 'md' }: ModalPr
           </button>
         </div>
         {/* Body */}
-        <div className="px-6 py-5">{children}</div>
+        <div className="px-6 py-5 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
   )

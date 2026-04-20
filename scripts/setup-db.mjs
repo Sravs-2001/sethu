@@ -6,11 +6,20 @@
 // No database password needed — uses Supabase Management API
 // ============================================================
 
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// ── Load .env.local if present ────────────────────────────────
+const envPath = join(__dirname, '..', '.env.local')
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+    const match = line.match(/^([^#=]+)=(.*)$/)
+    if (match) process.env[match[1].trim()] ??= match[2].trim()
+  }
+}
 
 // ── Validate env ─────────────────────────────────────────────
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL

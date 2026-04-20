@@ -1,36 +1,32 @@
-import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
-}
-
-async function getUser() {
+function sessionClient() {
   const cookieStore = cookies()
-  const supabase = createServerClient(
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } }
   )
+}
+
+async function getAuthedClient() {
+  const supabase = sessionClient()
   const { data: { user } } = await supabase.auth.getUser()
-  return user
+  return { supabase, user }
 }
 
 // GET /api/sprints?project_id=xxx
 export async function GET(request: Request) {
-  const user = await getUser()
+  const { supabase, user } = await getAuthedClient()
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
   const { searchParams } = new URL(request.url)
   const project_id = searchParams.get('project_id')
   if (!project_id) return NextResponse.json({ error: 'Missing project_id' }, { status: 400 })
 
-  const { data, error } = await adminClient()
+  const { data, error } = await supabase
     .from('sprints')
     .select('*')
     .eq('project_id', project_id)
@@ -40,15 +36,15 @@ export async function GET(request: Request) {
   return NextResponse.json(data)
 }
 
-// POST /api/sprints  — create sprint (admin client bypasses RLS)
+// POST /api/sprints
 export async function POST(request: Request) {
-  const user = await getUser()
+  const { supabase, user } = await getAuthedClient()
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
   const body = await request.json()
   if (!body.project_id) return NextResponse.json({ error: 'Missing project_id' }, { status: 400 })
 
-  const { data, error } = await adminClient()
+  const { data, error } = await supabase
     .from('sprints')
     .insert(body)
     .select()
@@ -63,7 +59,7 @@ export async function POST(request: Request) {
 
 // PATCH /api/sprints?id=xxx
 export async function PATCH(request: Request) {
-  const user = await getUser()
+  const { supabase, user } = await getAuthedClient()
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
   const { searchParams } = new URL(request.url)
@@ -71,10 +67,7 @@ export async function PATCH(request: Request) {
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const body = await request.json()
-  const { error } = await adminClient()
-    .from('sprints')
-    .update(body)
-    .eq('id', id)
+  const { error } = await supabase.from('sprints').update(body).eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
@@ -82,14 +75,14 @@ export async function PATCH(request: Request) {
 
 // DELETE /api/sprints?id=xxx
 export async function DELETE(request: Request) {
-  const user = await getUser()
+  const { supabase, user } = await getAuthedClient()
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  const { error } = await adminClient().from('sprints').delete().eq('id', id)
+  const { error } = await supabase.from('sprints').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
 }

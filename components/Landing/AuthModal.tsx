@@ -67,7 +67,7 @@ export default function AuthModal({ defaultMode = 'login', inviteToken, onClose 
       })
       const body = await res.json()
       if (!res.ok) {
-        setError(body.error ?? 'Failed to create account.')
+        setError(body.error || 'Failed to create account.')
         setLoading(null)
         return
       }
@@ -82,7 +82,12 @@ export default function AuthModal({ defaultMode = 'login', inviteToken, onClose 
     } else {
       const { data, error } = await authService.signInWithPassword(email, password)
       if (error) {
-        setError(error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message)
+        const msg = error.message
+        setError(
+          msg === 'Invalid login credentials'
+            ? 'Wrong email or password. Did you sign up with Google or GitHub?'
+            : msg
+        )
       } else if (data.session) {
         await acceptInvite()
         window.location.href = '/dashboard'

@@ -38,6 +38,9 @@ export default function JoinProjectPage() {
 
   useEffect(() => {
     async function init() {
+      // Always save token to localStorage so AppEntry can redeem it if auth redirects away
+      if (token) localStorage.setItem('pending_invite_token', token as string)
+
       // Check if already logged in
       const { data: { user } } = await supabase.auth.getUser()
       if (user) { setAuthed(true); setUserId(user.id) }

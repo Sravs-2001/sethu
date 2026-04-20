@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
@@ -8,17 +9,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing project_id or created_by' }, { status: 400 })
   }
 
-  const supabaseAdmin = createClient(
+  const cookieStore = cookies()
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll() {},
+      },
+    }
   )
 
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
   // Create a new invite token (expires in 7 days)
+  // it_insert policy: auth.uid() = created_by
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from('invite_tokens')
-    .insert({ project_id, role, created_by, expires_at: expiresAt })
+    .insert({ project_id, role, created_by: user.id, expires_at: expiresAt })
     .select('token')
     .single()
 

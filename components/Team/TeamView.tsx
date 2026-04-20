@@ -2,17 +2,32 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { projectService } from '@/lib/services'
+import { supabase } from '@/lib/supabase/client'
 import { useStore } from '@/store/useStore'
 import {
   Users, Shield, User, UserPlus, Mail, X, CheckCircle,
-  Loader2, Link2, Copy, Check, Lock, Zap, RefreshCw,
+  Loader2, Link2, Copy, Check, Zap, RefreshCw,
+  Activity, Clock, CheckCheck,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { formatDistanceToNow } from 'date-fns'
 import type { ProjectMember, Profile } from '@/types'
 
-type MemberRow = ProjectMember & { profile: Profile }
+type MemberRow = ProjectMember & {
+  profile:    Profile
+  taskCount:  number
+  lastActive: string | null
+  isActive:   boolean
+}
+
+type PendingInvite = {
+  id:          string
+  token:       string
+  role:        string
+  created_at:  string
+  uses:        number
+  expires_at?: string | null
+}
 
 // ── Clipboard helper with execCommand fallback ────────────────────
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -38,14 +53,14 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
 export default function TeamView() {
   const { project, user } = useStore()
-  const [members, setMembers]       = useState<MemberRow[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [showInvite, setShowInvite] = useState(false)
-  const [quickLink, setQuickLink]   = useState('')
-  const [generating, setGenerating] = useState(false)
-  const [copied, setCopied]         = useState(false)
+  const [members, setMembers]             = useState<MemberRow[]>([])
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
+  const [loading, setLoading]             = useState(true)
+  const [showInvite, setShowInvite]       = useState(false)
+  const [quickLink, setQuickLink]         = useState('')
+  const [generating, setGenerating]       = useState(false)
+  const [copied, setCopied]               = useState(false)
 
-  // Check if current user is a project admin
   const currentMember  = members.find(m => m.user_id === user?.id)
   const isProjectAdmin = currentMember?.role === 'admin'
     || user?.role === 'admin'
@@ -53,12 +68,61 @@ export default function TeamView() {
 
   async function loadMembers() {
     if (!project?.id) {
+      setMembers([])
+      setPendingInvites([])
       setLoading(false)
       return
     }
     setLoading(true)
-    const { data } = await projectService.getMembers(project.id)
-    setMembers((data ?? []) as MemberRow[])
+
+    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+
+    const [{ data: memberData }, { data: taskData }, { data: activityData }, { data: tokenData }] =
+      await Promise.all([
+        // Use RPC to bypass pm_select restriction (pm_select only returns own row to prevent recursion)
+        supabase.rpc('get_project_members', { p_project_id: project.id }),
+        supabase
+          .from('bugs')
+          .select('assignee_id')
+          .eq('project_id', project.id)
+          .not('assignee_id', 'is', null),
+        supabase
+          .from('activity_logs')
+          .select('user_id, created_at')
+          .gte('created_at', cutoff),
+        supabase
+          .from('invite_tokens')
+          .select('id, token, role, created_at, uses, expires_at')
+          .eq('project_id', project.id)
+          .eq('uses', 0),
+      ])
+
+    // task count per user
+    const taskCount: Record<string, number> = {}
+    for (const t of taskData ?? []) {
+      if (t.assignee_id) taskCount[t.assignee_id] = (taskCount[t.assignee_id] ?? 0) + 1
+    }
+
+    // last active per user
+    const lastActive: Record<string, string> = {}
+    for (const a of activityData ?? []) {
+      if (!lastActive[a.user_id] || a.created_at > lastActive[a.user_id])
+        lastActive[a.user_id] = a.created_at
+    }
+
+    const rows: MemberRow[] = (memberData ?? []).map((m: any) => ({
+      ...m,
+      taskCount:  taskCount[m.user_id]  ?? 0,
+      lastActive: lastActive[m.user_id] ?? null,
+      isActive:   !!lastActive[m.user_id],
+    }))
+
+    setMembers(rows)
+    setPendingInvites(
+      (tokenData ?? [])
+        .filter(t => !t.expires_at || new Date(t.expires_at) > new Date())
+        .map(t => ({ ...t }))
+    )
     setLoading(false)
   }
 
@@ -99,7 +163,7 @@ export default function TeamView() {
         <div>
           <h1 className="text-xl font-bold text-[#172B4D]">People</h1>
           <p className="text-sm text-[#5E6C84] mt-0.5">
-            {members.length} member{members.length !== 1 ? 's' : ''} in <span className="font-semibold">{project?.name}</span>
+            Members of <span className="font-semibold">{project?.name}</span>
           </p>
         </div>
         {isProjectAdmin && (
@@ -109,7 +173,31 @@ export default function TeamView() {
         )}
       </div>
 
-      {/* Quick invite link bar — visible to admins */}
+      {/* Stats summary — always show once loaded */}
+      {!loading && project && (
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: 'Total',    value: members.length,                       icon: <Users className="w-4 h-4" />,    bg: '#DEEBFF', color: '#0052CC' },
+            { label: 'Active',   value: members.filter(m => m.isActive).length,  icon: <Activity className="w-4 h-4" />, bg: '#E3FCEF', color: '#36B37E' },
+            { label: 'Inactive', value: members.filter(m => !m.isActive).length, icon: <Clock className="w-4 h-4" />,   bg: '#F4F5F7', color: '#7A869A' },
+            { label: 'Pending invites', value: pendingInvites.length,         icon: <Mail className="w-4 h-4" />,     bg: '#FFFAE6', color: '#FF8B00' },
+          ].map(s => (
+            <div key={s.label} className="bg-white border border-[#DFE1E6] rounded-xl px-4 py-3 flex items-center gap-3"
+              style={{ boxShadow: '0 1px 3px rgba(9,30,66,0.06)' }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: s.bg, color: s.color }}>
+                {s.icon}
+              </div>
+              <div>
+                <p className="text-xl font-bold" style={{ color: '#172B4D' }}>{s.value}</p>
+                <p className="text-xs" style={{ color: '#7A869A' }}>{s.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Quick invite link bar — admins only */}
       {isProjectAdmin && (
         <div className="bg-white border border-[#DFE1E6] rounded-xl px-4 py-3.5 flex items-center gap-3"
           style={{ boxShadow: '0 1px 3px rgba(9,30,66,0.08)' }}>
@@ -150,17 +238,6 @@ export default function TeamView() {
         </div>
       )}
 
-      {/* Privacy notice */}
-      <div className="flex items-start gap-3 bg-[#DEEBFF] border border-[#B3D4FF] rounded-lg px-4 py-3">
-        <Lock className="w-4 h-4 text-[#0052CC] mt-0.5 flex-shrink-0" />
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-[#0052CC]">This project is private</p>
-          <p className="text-xs text-[#0065FF] mt-0.5">
-            Only people listed below have access. No one outside this list can view, search or join without an explicit invite from a project admin.
-          </p>
-        </div>
-      </div>
-
       {!project && !loading ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="w-14 h-14 bg-[#F4F5F7] rounded-2xl flex items-center justify-center mb-3">
@@ -173,45 +250,139 @@ export default function TeamView() {
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-[#0052CC]" />
         </div>
+      ) : members.length === 0 && pendingInvites.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-14 h-14 bg-[#F4F5F7] rounded-2xl flex items-center justify-center mb-3">
+            <Users className="w-7 h-7 text-[#B3BAC5]" />
+          </div>
+          <p className="text-sm font-semibold text-[#172B4D] mb-1">No team members yet</p>
+          <p className="text-sm text-[#7A869A] mb-4">Invite people to collaborate on this project.</p>
+          {isProjectAdmin && (
+            <button onClick={() => setShowInvite(true)} className="btn-primary">
+              <UserPlus className="w-4 h-4" /> Invite people
+            </button>
+          )}
+        </div>
       ) : (
-        <>
-          {admins.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <Shield className="w-3.5 h-3.5 text-amber-500" />
-                <span className="text-xs font-bold uppercase tracking-wider text-[#5E6C84]">Project Admins</span>
-                <span className="text-xs bg-[#FFFAE6] text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 font-semibold">{admins.length}</span>
-              </div>
-              <MemberList members={admins} currentUserId={user?.id} />
-            </section>
-          )}
+        <div className="space-y-4">
+          {/* ── Accepted members table ── */}
+          {members.length > 0 && <div className="bg-white rounded-xl border border-[#DFE1E6] overflow-hidden"
+            style={{ boxShadow: '0 1px 3px rgba(9,30,66,0.08)' }}>
+            <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-3 px-4 py-2.5 bg-[#F8F9FC] border-b border-[#DFE1E6]">
+              <span className="w-9" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#7A869A]">Name</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#7A869A]">Role</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#7A869A]">Status</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#7A869A]">Tasks</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#7A869A]">Joined</span>
+            </div>
 
-          {regular.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <User className="w-3.5 h-3.5 text-[#5E6C84]" />
-                <span className="text-xs font-bold uppercase tracking-wider text-[#5E6C84]">Members</span>
-                <span className="text-xs bg-[#F4F5F7] text-[#5E6C84] border border-[#DFE1E6] rounded-full px-2 py-0.5 font-semibold">{regular.length}</span>
-              </div>
-              <MemberList members={regular} currentUserId={user?.id} />
-            </section>
-          )}
+            {members.map(m => {
+              const p = m.profile
+              if (!p) return null
+              return (
+                <div key={m.id}
+                  className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-3 border-b border-[#F4F5F7] last:border-0 hover:bg-[#FAFBFC] transition-colors">
+                  {/* Avatar */}
+                  <div className="w-9 h-9 flex-shrink-0">
+                    {p.avatar_url ? (
+                      <img src={p.avatar_url} alt={p.name} className="w-9 h-9 rounded-full object-cover border border-[#DFE1E6]" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                        style={{ background: `hsl(${p.name.charCodeAt(0) * 10 % 360}, 65%, 45%)` }}>
+                        {p.name[0]?.toUpperCase() ?? '?'}
+                      </div>
+                    )}
+                  </div>
 
-          {members.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-14 h-14 bg-[#F4F5F7] rounded-2xl flex items-center justify-center mb-3">
-                <Users className="w-7 h-7 text-[#B3BAC5]" />
+                  {/* Name */}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-[#172B4D] truncate">{p.name}</span>
+                      {p.id === user?.id && <span className="text-[10px] text-[#7A869A]">(you)</span>}
+                    </div>
+                    {m.lastActive && (
+                      <p className="text-[11px] text-[#97A0AF]">
+                        Last active {formatDistanceToNow(new Date(m.lastActive), { addSuffix: true })}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Role */}
+                  <span className={clsx(
+                    'text-[11px] font-semibold px-2.5 py-1 rounded-full border capitalize flex-shrink-0',
+                    m.role === 'admin' ? 'bg-[#FFFAE6] text-amber-700 border-amber-200' : 'bg-[#F4F5F7] text-[#5E6C84] border-[#DFE1E6]'
+                  )}>
+                    {m.role === 'admin' ? '⭐ Admin' : 'Member'}
+                  </span>
+
+                  {/* Active status */}
+                  <span className={clsx(
+                    'flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border flex-shrink-0',
+                    m.isActive
+                      ? 'bg-[#E3FCEF] text-[#006644] border-[#ABF5D1]'
+                      : 'bg-[#F4F5F7] text-[#97A0AF] border-[#DFE1E6]'
+                  )}>
+                    <span className={clsx('w-1.5 h-1.5 rounded-full', m.isActive ? 'bg-[#36B37E]' : 'bg-[#C1C7D0]')} />
+                    {m.isActive ? 'Active' : 'Inactive'}
+                  </span>
+
+                  {/* Tasks assigned */}
+                  <span className="text-[11px] font-semibold text-[#172B4D] flex-shrink-0 text-center">
+                    {m.taskCount > 0
+                      ? <span className="bg-[#DEEBFF] text-[#0052CC] px-2 py-0.5 rounded-full">{m.taskCount} task{m.taskCount !== 1 ? 's' : ''}</span>
+                      : <span className="text-[#C1C7D0]">—</span>
+                    }
+                  </span>
+
+                  {/* Joined */}
+                  <span className="text-xs text-[#97A0AF] flex-shrink-0 whitespace-nowrap">
+                    <span className="flex items-center gap-1">
+                      <CheckCheck className="w-3 h-3 text-[#36B37E]" />
+                      {formatDistanceToNow(new Date(m.created_at), { addSuffix: true })}
+                    </span>
+                  </span>
+                </div>
+              )
+            })}
+          </div>}
+
+          {/* ── Pending invites ── */}
+          {pendingInvites.length > 0 && (
+            <div className="bg-white rounded-xl border border-[#DFE1E6] overflow-hidden"
+              style={{ boxShadow: '0 1px 3px rgba(9,30,66,0.08)' }}>
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-[#FFFAE6] border-b border-[#FFE380]">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                  Pending Invites ({pendingInvites.length})
+                </span>
               </div>
-              <p className="text-sm font-semibold text-[#172B4D] mb-1">No team members yet</p>
-              <p className="text-sm text-[#7A869A] mb-4">Invite people to collaborate on this project.</p>
-              {isProjectAdmin && (
-                <button onClick={() => setShowInvite(true)} className="btn-primary">
-                  <UserPlus className="w-4 h-4" /> Invite people
-                </button>
-              )}
+              {pendingInvites.map(inv => (
+                <div key={inv.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#F4F5F7] last:border-0">
+                  <div className="w-9 h-9 rounded-full bg-[#FFFAE6] flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[#172B4D]">Invite link</p>
+                    <p className="text-xs text-[#7A869A]">
+                      Created {formatDistanceToNow(new Date(inv.created_at), { addSuffix: true })}
+                      {inv.expires_at && ` · expires ${formatDistanceToNow(new Date(inv.expires_at), { addSuffix: true })}`}
+                    </p>
+                  </div>
+                  <span className={clsx(
+                    'text-[11px] font-semibold px-2.5 py-1 rounded-full border capitalize flex-shrink-0',
+                    inv.role === 'admin' ? 'bg-[#FFFAE6] text-amber-700 border-amber-200' : 'bg-[#F4F5F7] text-[#5E6C84] border-[#DFE1E6]'
+                  )}>
+                    {inv.role}
+                  </span>
+                  <span className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#FFFAE6] text-amber-700 border border-amber-200 flex-shrink-0">
+                    <Clock className="w-3 h-3" /> Not accepted
+                  </span>
+                </div>
+              ))}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {showInvite && project && (
@@ -226,49 +397,6 @@ export default function TeamView() {
   )
 }
 
-function MemberList({ members, currentUserId }: { members: MemberRow[]; currentUserId?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-[#DFE1E6] divide-y divide-[#F4F5F7] overflow-hidden shadow-sm">
-      {members.map(m => {
-        const p = m.profile
-        if (!p) return null
-        return (
-          <div key={m.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-[#F8F9FC] transition-colors">
-            <div className="flex-shrink-0">
-              {p.avatar_url ? (
-                <img src={p.avatar_url} alt={p.name} className="w-9 h-9 rounded-full object-cover border border-[#DFE1E6]" />
-              ) : (
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                  style={{ background: `hsl(${p.name.charCodeAt(0) * 10 % 360}, 65%, 45%)` }}>
-                  {p.name[0]?.toUpperCase() ?? '?'}
-                </div>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-semibold text-[#172B4D] truncate">{p.name}</span>
-                {p.id === currentUserId && (
-                  <span className="text-[10px] text-[#7A869A] flex-shrink-0">(you)</span>
-                )}
-              </div>
-              <div className="text-xs text-[#7A869A]">
-                Added {formatDistanceToNow(new Date(m.created_at), { addSuffix: true })}
-              </div>
-            </div>
-            <span className={clsx(
-              'text-[11px] font-semibold px-2 py-0.5 rounded-full border capitalize flex-shrink-0',
-              m.role === 'admin'
-                ? 'bg-[#FFFAE6] text-amber-700 border-amber-200'
-                : 'bg-[#F4F5F7] text-[#5E6C84] border-[#DFE1E6]'
-            )}>
-              {m.role}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
   projectId: string
