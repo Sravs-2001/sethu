@@ -548,12 +548,18 @@ export default function TaskBoard() {
   }, [tasks])
 
   useEffect(() => {
+    let mounted = true
     if (!project) return
     const pid = project.id
-    const refresh = () => bugService.getByProject(pid).then(({ data }) => data && setBugs(data as any))
+    const refresh = () => bugService.getByProject(pid).then(({ data }) => {
+      if (mounted && data) setBugs(data as any)
+    })
     refresh()
-    if (sprints.length === 0) sprintService.getByProject(pid).then(({ data }) => data && setSprints(data as any))
-    return bugService.subscribe(pid, refresh)
+    if (sprints.length === 0) sprintService.getByProject(pid).then(({ data }) => {
+      if (mounted && data) setSprints(data as any)
+    })
+    const unsub = bugService.subscribe(pid, refresh)
+    return () => { mounted = false; unsub() }
   }, [project?.id])
 
   useEffect(() => {

@@ -15,10 +15,14 @@ export const bugService = {
       .limit(50)
   },
   async getByProject(projectId: string) {
-    const res = await fetch(`/api/bugs?project_id=${projectId}`)
-    const data = await res.json()
-    if (!res.ok) return { data: null, error: data }
-    return { data, error: null }
+    try {
+      const res = await fetch(`/api/bugs?project_id=${projectId}`)
+      const data = await res.json()
+      if (!res.ok) return { data: null, error: data }
+      return { data, error: null }
+    } catch {
+      return { data: null, error: { message: 'Network error' } }
+    }
   },
 
   async getByAssignee(userId: string) {
@@ -31,39 +35,51 @@ export const bugService = {
   },
 
   async create(payload: Partial<Bug> & { project_id: string; created_by: string }) {
-    const res = await fetch('/api/bugs', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    })
-    const data = await res.json()
-    if (!res.ok) return { data: null, error: data }
-    return { data, error: null }
+    try {
+      const res = await fetch('/api/bugs', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) return { data: null, error: data }
+      return { data, error: null }
+    } catch {
+      return { data: null, error: { message: 'Network error' } }
+    }
   },
 
   async update(id: string, payload: Partial<Bug>) {
-    const res = await fetch(`/api/bugs?id=${id}`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    })
-    const data = await res.json()
-    if (!res.ok) return { data: null, error: data }
-    return { data, error: null }
+    try {
+      const res = await fetch(`/api/bugs?id=${id}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) return { data: null, error: data }
+      return { data, error: null }
+    } catch {
+      return { data: null, error: { message: 'Network error' } }
+    }
   },
 
   async delete(id: string) {
-    const res = await fetch(`/api/bugs?id=${id}`, { method: 'DELETE' })
-    const data = await res.json()
-    if (!res.ok) return { data: null, error: data }
-    return { data, error: null }
+    try {
+      const res = await fetch(`/api/bugs?id=${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) return { data: null, error: data }
+      return { data, error: null }
+    } catch {
+      return { data: null, error: { message: 'Network error' } }
+    }
   },
 
   async getStatsByProjects(projectIds: string[]) {
     return supabase.from('bugs').select('project_id, status, priority').in('project_id', projectIds)
   },
 
-  subscribe(projectId: string, onRefresh: () => void) {
+  subscribe(projectId: string, onRefresh: () => void): () => void {
     const channel = supabase
       .channel(`kanban-${projectId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bugs' }, onRefresh)

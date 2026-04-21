@@ -5,7 +5,7 @@ import { bugService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import {
   CheckCircle2, Clock, AlertTriangle, ListTodo,
-  Search, ChevronDown, Filter, Calendar, User2,
+  Search, ChevronDown, Filter, Calendar,
   Loader2, LayoutGrid, List, BarChart3,
 } from 'lucide-react'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
