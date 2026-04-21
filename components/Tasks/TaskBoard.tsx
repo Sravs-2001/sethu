@@ -544,7 +544,7 @@ export default function TaskBoard() {
   const allTags = useMemo(() => {
     const set = new Set<string>()
     tasks.forEach(t => (t.tags ?? []).forEach(tag => set.add(tag)))
-    return [...set]
+    return Array.from(set)
   }, [tasks])
 
   useEffect(() => {
