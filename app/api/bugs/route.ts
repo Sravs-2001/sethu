@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-const SELECT_BUG = '*, assignee:profiles(*), reporter:profiles(*)'
+const SELECT_BUG = '*, assignee:profiles!assignee_id(*), reporter:profiles!created_by(*)'
 
 function sessionClient() {
   const cookieStore = cookies()

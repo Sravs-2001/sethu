@@ -121,7 +121,7 @@ function IssueForm({ initial, onSave, onClose }: {
       <div>
         <FieldLabel>Issue type</FieldLabel>
         <div className="flex flex-wrap gap-2">
-          {ISSUE_TYPES.map(t => {
+          {ISSUE_TYPES.filter(t => t !== 'bug').map(t => {
             const cfg    = ISSUE_TYPE_CONFIG[t]
             const active = form.issue_type === t
             return (
@@ -678,6 +678,7 @@ export default function KanbanBoard() {
 
   // ── Filtering ─────────────────────────────────────────────────────────────
   const filtered = useMemo(() => bugs.filter(b =>
+    b.issue_type !== 'bug' &&
     (!search         || b.title.toLowerCase().includes(search.toLowerCase())) &&
     (!filterPriority || b.priority === filterPriority) &&
     (!filterType     || b.issue_type === filterType) &&
@@ -736,7 +737,7 @@ export default function KanbanBoard() {
           <select className="input py-1 text-xs" style={{ width: 120 }}
             value={filterType} onChange={e => setFilterType(e.target.value as any)}>
             <option value="">All types</option>
-            {ISSUE_TYPES.map(t => (
+            {ISSUE_TYPES.filter(t => t !== 'bug').map(t => (
               <option key={t} value={t}>{ISSUE_TYPE_CONFIG[t].icon} {ISSUE_TYPE_CONFIG[t].label}</option>
             ))}
           </select>

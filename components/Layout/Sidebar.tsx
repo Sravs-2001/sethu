@@ -9,16 +9,16 @@ import type { Project } from '@/types'
 import {
   LayoutGrid, Sparkles, MessageSquare, Users,
   ChevronDown, Plus, Check, Loader2, Rocket,
-  Settings, Shield, BarChart2, Activity,
-  Lock, ChevronLeft,
+  Settings, Shield, BarChart2, Activity, Bug,
+  Lock, ChevronLeft, ListTodo, Zap, CheckSquare,
 } from 'lucide-react'
 import clsx from 'clsx'
 import Modal from '@/components/ui/Modal'
 import { AVATAR_COLORS } from '@/lib/constants'
 
 function toKey(name: string) {
-  return name.toUpperCase().replace(/[^A-Z0-9\s]/g,'').trim()
-    .split(/\s+/).map(w => w[0]).join('').slice(0,4) || 'PROJ'
+  return name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').trim()
+    .split(/\s+/).map(w => w[0]).join('').slice(0, 4) || 'PROJ'
 }
 
 function NewProjectModal({ onClose, onCreated }: {
@@ -26,12 +26,12 @@ function NewProjectModal({ onClose, onCreated }: {
   onCreated: (p: Project) => void
 }) {
   const { user } = useStore()
-  const [name, setName]               = useState('')
-  const [key, setKey]                 = useState('')
+  const [name, setName] = useState('')
+  const [key, setKey] = useState('')
   const [description, setDescription] = useState('')
-  const [color, setColor]             = useState(AVATAR_COLORS[0])
-  const [saving, setSaving]           = useState(false)
-  const [error, setError]             = useState('')
+  const [color, setColor] = useState(AVATAR_COLORS[0])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   function handleNameChange(v: string) { setName(v); setKey(toKey(v)) }
 
@@ -79,7 +79,7 @@ function NewProjectModal({ onClose, onCreated }: {
             Project key <span className="text-[#DE350B]">*</span>
           </label>
           <input className="input" value={key}
-            onChange={e => setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6))}
+            onChange={e => setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
             placeholder="PROJ" required />
           <p className="text-[11px] mt-1 text-[#7A869A]">Used to prefix issue keys (e.g. {key || 'PROJ'}-1)</p>
         </div>
@@ -124,31 +124,34 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
     projectMembers,
   } = useStore()
 
-  const pathname    = usePathname()
-  const router      = useRouter()
+  const pathname = usePathname()
+  const router = useRouter()
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const [dropdownOpen,   setDropdownOpen]   = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [showNewProject, setShowNewProject] = useState(false)
-  const [collapsed,      setCollapsed]      = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
 
-  const isSiteAdmin    = user?.role === 'admin'
+  const isSiteAdmin = user?.role === 'admin'
   const isProjectAdmin = isSiteAdmin
     || projectMembers.some(m => m.user_id === user?.id && m.role === 'admin')
     || project?.created_by === user?.id
 
-  const openBugs     = bugs.filter(b => b.status !== 'done').length
+  const openBugs = bugs.filter(b => b.status !== 'done').length
   const openFeatures = features.filter(f => f.status !== 'done').length
 
   const allNavItems: NavItem[] = [
-    { icon: Activity,      label: 'Summary',         href: '/dashboard/summary'  },
-    { icon: LayoutGrid,    label: 'Board',            href: '/dashboard/board',    badge: openBugs     || null },
-    { icon: Rocket,        label: 'Sprints',          href: '/dashboard/backlog'  },
-    { icon: Sparkles,      label: 'Features',         href: '/dashboard/features', badge: openFeatures || null },
-    { icon: MessageSquare, label: 'Chat',             href: '/dashboard/chat'     },
-    { icon: Users,         label: 'People',           href: '/dashboard/people'   },
-    { icon: BarChart2,     label: 'Reports',          href: '/dashboard/reports',  adminOnly: true },
-    { icon: Settings,      label: 'Project settings', href: '/dashboard/settings', adminOnly: true },
+    { icon: Activity, label: 'Summary', href: '/dashboard/summary' },
+    { icon: Bug, label: 'Bug Board', href: '/dashboard/board' },
+    // badge: openBugs || null },
+    { icon: Zap, label: 'Planning', href: '/dashboard/epics' },
+    { icon: CheckSquare, label: 'Tasks', href: '/dashboard/tasks' },
+    { icon: Rocket, label: 'Sprints', href: '/dashboard/backlog' },
+    { icon: Sparkles, label: 'Features', href: '/dashboard/features', badge: openFeatures || null },
+    { icon: MessageSquare, label: 'Chat', href: '/dashboard/chat' },
+    { icon: Users, label: 'People', href: '/dashboard/people' },
+    { icon: BarChart2, label: 'Reports', href: '/dashboard/reports', adminOnly: true },
+    { icon: Settings, label: 'Project settings', href: '/dashboard/settings', adminOnly: true },
   ]
 
   const navItems = allNavItems.filter(item => !item.adminOnly || isProjectAdmin)
@@ -182,7 +185,7 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
           <div className="flex justify-center pt-3 pb-2">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-bold"
               style={{ backgroundColor: project?.avatar_color ?? '#374151' }}>
-              {project?.key?.slice(0,2) ?? 'P'}
+              {project?.key?.slice(0, 2) ?? 'P'}
             </div>
           </div>
           <div className="h-px mx-2 bg-gray-100 mb-1" />
@@ -232,7 +235,7 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
             )}>
             <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
               style={{ backgroundColor: project?.avatar_color ?? '#374151' }}>
-              {project?.key?.slice(0,2) ?? 'P'}
+              {project?.key?.slice(0, 2) ?? 'P'}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
@@ -264,7 +267,7 @@ export default function Sidebar({ onGoToAdmin }: SidebarProps) {
                         className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors">
                         <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
                           style={{ backgroundColor: p.avatar_color }}>
-                          {p.key.slice(0,2)}
+                          {p.key.slice(0, 2)}
                         </div>
                         <span className="text-sm flex-1 truncate font-medium text-gray-900">{p.name}</span>
                         <Lock className="w-3 h-3 text-gray-300 flex-shrink-0" />

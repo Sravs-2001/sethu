@@ -1,2 +1,2 @@
-import KanbanBoard from '@/components/Tasks/KanbanBoard'
-export default function BoardPage() { return <KanbanBoard /> }
+import BugBoard from '@/components/Bugs/BugBoard'
+export default function BoardPage() { return <BugBoard /> }

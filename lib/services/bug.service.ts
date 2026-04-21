@@ -2,6 +2,18 @@ import { supabase } from '@/lib/supabase/client'
 import type { Bug } from '@/types'
 
 export const bugService = {
+  async logActivity(taskId: string, userId: string, action: string, from?: string | null, to?: string | null) {
+    return supabase.from('activity_logs').insert({ task_id: taskId, user_id: userId, action, from: from ?? null, to: to ?? null })
+  },
+
+  async getActivity(taskId: string) {
+    return supabase
+      .from('activity_logs')
+      .select('*, user:profiles!user_id(id, name, avatar_url)')
+      .eq('task_id', taskId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+  },
   async getByProject(projectId: string) {
     const res = await fetch(`/api/bugs?project_id=${projectId}`)
     const data = await res.json()
