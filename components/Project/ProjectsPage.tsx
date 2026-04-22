@@ -30,7 +30,7 @@ function NewProjectModal({ onClose, onCreated }: {
   onClose: () => void
   onCreated: (p: Project) => void
 }) {
-  const { user } = useStore()
+  const { user, addToast } = useStore()
   const [name, setName]               = useState('')
   const [key, setKey]                 = useState('')
   const [description, setDescription] = useState('')
@@ -53,7 +53,13 @@ function NewProjectModal({ onClose, onCreated }: {
       }),
     })
     const body = await res.json()
-    if (!res.ok) { setError(body.error || 'Failed to create project'); setSaving(false); return }
+    if (!res.ok) {
+      const msg = body.error || 'Failed to create project'
+      setError(msg); setSaving(false)
+      addToast('error', msg)
+      return
+    }
+    addToast('success', `Project "${name.trim()}" created.`)
     onCreated(body.project as Project)
   }
 
@@ -263,7 +269,7 @@ function InviteCard({ invite, onAccept, onDecline }: {
 type Tab = 'projects' | 'invites'
 
 export default function ProjectsPage() {
-  const { projects, project: activeProject, user, setProject, setProjects, addProject, setBugs, setFeatures, setSprints } = useStore()
+  const { projects, project: activeProject, user, setProject, setProjects, addProject, setBugs, setFeatures, setSprints, addToast } = useStore()
   const router = useRouter()
 
   const [tab,        setTab]        = useState<Tab>('projects')
@@ -324,11 +330,13 @@ export default function ProjectsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, notification_id: invite.id }),
     })
-    if (!res.ok) return
+    if (!res.ok) {
+      addToast('error', res.status === 404 ? 'Invite not found or already used.' : 'Failed to accept invite.')
+      return
+    }
     const { project } = await res.json()
-    // Remove from invite list immediately
     setInvites(prev => prev.filter(i => i.id !== invite.id))
-    // Add project to store and navigate inside it
+    addToast('success', 'Joined project successfully!')
     if (project) {
       const updated = [...projects.filter(p => p.id !== project.id), project]
       setProjects(updated as Project[])
@@ -341,12 +349,14 @@ export default function ProjectsPage() {
   // ── Decline invite ────────────────────────────────────────────────────────
   async function handleDecline(invite: Notification) {
     const token = invite.data?.token as string | undefined
-    await fetch('/api/invite/decline', {
+    const res = await fetch('/api/invite/decline', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ notification_id: invite.id, token }),
     })
+    if (!res.ok) { addToast('error', 'Failed to decline invite.'); return }
     setInvites(prev => prev.filter(i => i.id !== invite.id))
+    addToast('info', 'Invite declined.')
   }
 
   // ── Project handlers ──────────────────────────────────────────────────────

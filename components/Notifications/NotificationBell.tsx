@@ -22,7 +22,7 @@ const TYPE_ICON: Record<Notification['type'], string> = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function NotificationBell() {
-  const { user, notifications, setNotifications, markNotificationRead, markAllNotificationsRead, setProjects, setProject, projects } = useStore()
+  const { user, notifications, setNotifications, markNotificationRead, markAllNotificationsRead, setProjects, setProject, projects, addToast } = useStore()
   const router = useRouter()
   const [open,         setOpen]         = useState(false)
   const [loading,      setLoading]      = useState(false)
@@ -68,6 +68,7 @@ export default function NotificationBell() {
     if (!user || unread === 0) return
     await notificationService.markAllRead(user.id)
     markAllNotificationsRead()
+    addToast('success', 'All notifications marked as read.')
   }
 
   async function handleAcceptInvite(n: Notification) {
@@ -82,13 +83,14 @@ export default function NotificationBell() {
       })
       if (!res.ok) {
         setInviteAction(prev => { const s = { ...prev }; delete s[n.id]; return s })
+        addToast('error', res.status === 404 ? 'Invite not found or already used.' : 'Failed to accept invite. Please try again.')
         return
       }
       const { project } = await res.json()
       markNotificationRead(n.id)
       setInviteAction(prev => ({ ...prev, [n.id]: 'done' }))
       setOpen(false)
-      // Add the project to the store and navigate into it
+      addToast('success', `Joined project successfully!`)
       if (project) {
         const next = [...projects.filter(p => p.id !== project.id), project]
         setProjects(next as any)
@@ -97,6 +99,7 @@ export default function NotificationBell() {
       }
     } catch {
       setInviteAction(prev => { const s = { ...prev }; delete s[n.id]; return s })
+      addToast('error', 'Something went wrong. Please try again.')
     }
   }
 
@@ -104,15 +107,22 @@ export default function NotificationBell() {
     const token = n.data?.token as string | undefined
     setInviteAction(prev => ({ ...prev, [n.id]: 'declining' }))
     try {
-      await fetch('/api/invite/decline', {
+      const res = await fetch('/api/invite/decline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notification_id: n.id, token }),
       })
+      if (!res.ok) {
+        setInviteAction(prev => { const s = { ...prev }; delete s[n.id]; return s })
+        addToast('error', 'Failed to decline invite.')
+        return
+      }
       markNotificationRead(n.id)
       setInviteAction(prev => ({ ...prev, [n.id]: 'done' }))
+      addToast('info', 'Invite declined.')
     } catch {
       setInviteAction(prev => { const s = { ...prev }; delete s[n.id]; return s })
+      addToast('error', 'Something went wrong. Please try again.')
     }
   }
 
@@ -122,10 +132,7 @@ export default function NotificationBell() {
       <button
         onClick={() => setOpen(o => !o)}
         title="Notifications"
-        className="relative p-1.5 rounded transition-colors"
-        style={{ color: 'rgba(255,255,255,0.6)' }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'; (e.currentTarget as HTMLElement).style.color = 'white' }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.6)' }}>
+        className="relative p-1.5 rounded transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900">
         <Bell className="w-4 h-4" />
         {unread > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 text-[9px] font-bold text-white rounded-full flex items-center justify-center"

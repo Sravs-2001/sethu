@@ -52,7 +52,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 export default function TeamView() {
-  const { project, user } = useStore()
+  const { project, user, addToast } = useStore()
   const [members, setMembers]             = useState<MemberRow[]>([])
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
   const [loading, setLoading]             = useState(true)
@@ -142,6 +142,9 @@ export default function TeamView() {
     if (res.ok) {
       const { url } = await res.json()
       setQuickLink(url)
+      addToast('success', 'Invite link generated.')
+    } else {
+      addToast('error', 'Failed to generate invite link.')
     }
     setGenerating(false)
   }
@@ -404,6 +407,7 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
   currentUserId?: string
   onClose: () => void
 }) {
+  const { addToast } = useStore()
   const [tab, setTab]               = useState<'link' | 'email'>('link')
 
   // Link tab
@@ -436,6 +440,9 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
     if (res.ok) {
       const { url } = await res.json()
       setInviteLink(url)
+      addToast('success', 'Invite link generated.')
+    } else {
+      addToast('error', 'Failed to generate invite link.')
     }
     setGenerating(false)
   }
@@ -485,6 +492,10 @@ function InvitePanel({ projectId, projectName, currentUserId, onClose }: {
     }
     setResults(out)
     setSending(false)
+    const sent = out.filter(r => r.emailSent).length
+    if (sent > 0) addToast('success', `${sent} invite${sent !== 1 ? 's' : ''} sent successfully.`)
+    else if (out.some(r => r.inviteUrl)) addToast('info', 'Invites created — copy the links to share.')
+    else addToast('error', 'Failed to send invites.')
   }
 
   const isDone = results.length > 0

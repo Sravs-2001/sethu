@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Global font ───────────────────────────────────────────────────────────── */
 body {
   font-family: 'Space Grotesk', sans-serif;

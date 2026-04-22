@@ -1,7 +1,7 @@
 // ── Primitives ────────────────────────────────────────────────────────────────
 
 export type Priority     = 'critical' | 'high' | 'medium' | 'low'
-export type Status       = 'todo' | 'in_progress' | 'review' | 'done'
+export type Status       = 'unassigned' | 'assigned' | 'todo' | 'in_progress' | 'review' | 'done'
 export type SprintStatus = 'planning' | 'active' | 'completed'
 export type IssueType    = 'epic' | 'story' | 'task' | 'bug' | 'subtask'
 export type View         = 'board' | 'backlog' | 'bugs' | 'features' | 'chat' | 'team' | 'projects' | 'reports' | 'settings'
@@ -77,6 +77,7 @@ export interface Bug {
   assignee?:     Profile
   reporter_id?:  string
   reporter?:     Profile
+  epic_id?:      string
   sprint_id?:    string
   due_date?:     string
   labels?:       string[]

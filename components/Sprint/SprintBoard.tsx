@@ -121,7 +121,7 @@ export default function SprintBoard() {
   const {
     sprints, setSprints, addSprint, updateSprint,
     bugs, setBugs, addBug, features, setFeatures, project,
-    user, projectMembers,
+    user, projectMembers, addToast, startLoading, stopLoading,
   } = useStore()
   const [showCreate,   setShowCreate]   = useState(false)
   const [activeSprint, setActiveSprint] = useState<Sprint | null>(null)
@@ -148,23 +148,31 @@ export default function SprintBoard() {
 
   async function handleCreateSprint(data: Partial<Sprint>) {
     if (!project || !isProjectAdmin) return
-    const { data: sprint } = await sprintService.create({ ...data, project_id: project.id })
-    if (sprint) { addSprint(sprint); setActiveSprint(sprint) }
+    startLoading()
+    const { data: sprint, error } = await sprintService.create({ ...data, project_id: project.id })
+    stopLoading()
+    if (error) { addToast('error', 'Failed to create sprint.'); return }
+    if (sprint) { addSprint(sprint); setActiveSprint(sprint); addToast('success', `Sprint "${sprint.name}" created.`) }
   }
 
   async function handleSprintStatusChange(sprint: Sprint, status: SprintStatus) {
     if (!isProjectAdmin) return
-    await sprintService.update(sprint.id, { status })
+    startLoading()
+    const { error } = await sprintService.update(sprint.id, { status })
+    stopLoading()
+    if (error) { addToast('error', 'Failed to update sprint status.'); return }
     updateSprint(sprint.id, { status })
     setActiveSprint({ ...sprint, status })
+    addToast('success', `Sprint marked as ${status.replace('_', ' ')}.`)
   }
 
   async function handleSeedSampleData() {
     if (!project || !user || !isProjectAdmin) return
     setSeeding(true)
+    startLoading()
     const today     = new Date()
     const twoWeeks  = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000)
-    const { data: sprint } = await sprintService.create({
+    const { data: sprint, error } = await sprintService.create({
       project_id: project.id,
       name:       'Sprint 1 · Q2 2026',
       goal:       'Ship core auth flow, fix critical bugs, and set up test coverage',
@@ -172,6 +180,7 @@ export default function SprintBoard() {
       end_date:   twoWeeks.toISOString().split('T')[0],
       status:     'active',
     })
+    if (error) { stopLoading(); setSeeding(false); addToast('error', 'Failed to seed sample data.'); return }
     if (sprint) {
       addSprint(sprint)
       setActiveSprint(sprint)
@@ -185,7 +194,9 @@ export default function SprintBoard() {
         })
         if (created) addBug(created as any)
       }
+      addToast('success', 'Sample sprint and issues loaded.')
     }
+    stopLoading()
     setSeeding(false)
   }
 

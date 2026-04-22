@@ -118,7 +118,7 @@ function FeatureForm({ initial, onSave, onClose }: {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function FeatureList() {
-  const { features, setFeatures, addFeature, updateFeature, deleteFeature, user, project } = useStore()
+  const { features, setFeatures, addFeature, updateFeature, deleteFeature, user, project, addToast, startLoading, stopLoading } = useStore()
   const [showCreate,    setShowCreate]    = useState(false)
   const [editing,       setEditing]       = useState<Feature | null>(null)
   const [filterStatus,  setFilterStatus]  = useState<Status | ''>('')
@@ -134,25 +134,40 @@ export default function FeatureList() {
 
   async function handleCreate(data: Partial<Feature>) {
     if (!user || !project) return
-    const { data: feat } = await featureService.create({ ...data, created_by: user.id, project_id: project.id })
-    if (feat) addFeature(feat as any)
+    startLoading()
+    const { data: feat, error } = await featureService.create({ ...data, created_by: user.id, project_id: project.id })
+    stopLoading()
+    if (error) { addToast('error', 'Failed to create feature.'); return }
+    if (feat) { addFeature(feat as any); addToast('success', 'Feature created.') }
   }
 
   async function handleUpdate(data: Partial<Feature>) {
     if (!editing) return
-    await featureService.update(editing.id, data)
+    startLoading()
+    const { error } = await featureService.update(editing.id, data)
+    stopLoading()
+    if (error) { addToast('error', 'Failed to update feature.'); return }
     updateFeature(editing.id, data)
+    addToast('success', 'Feature updated.')
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this feature?')) return
-    await featureService.delete(id)
+    startLoading()
+    const { error } = await featureService.delete(id)
+    stopLoading()
+    if (error) { addToast('error', 'Failed to delete feature.'); return }
     deleteFeature(id)
+    addToast('success', 'Feature deleted.')
   }
 
   async function handleStatusChange(feature: Feature, status: Status) {
-    await featureService.update(feature.id, { status })
+    startLoading()
+    const { error } = await featureService.update(feature.id, { status })
+    stopLoading()
+    if (error) { addToast('error', 'Failed to update status.'); return }
     updateFeature(feature.id, { status })
+    addToast('success', `Status updated to ${status.replace('_', ' ')}.`)
   }
 
   const filtered = features.filter(f => !filterStatus || f.status === filterStatus)

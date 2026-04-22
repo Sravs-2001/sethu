@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { bugService, sprintService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
-import { Plus, X, Trash2, ChevronDown, ChevronRight, CheckSquare, Square } from 'lucide-react'
+import { Plus, X, Trash2, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import {
   STATUSES, STATUS_CONFIG, PRIORITIES, PRIORITY_CONFIG,
@@ -21,6 +21,8 @@ import {
   SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+
+const BOARD_COLUMNS: Status[] = ['unassigned', 'assigned', 'todo', 'in_progress', 'done']
 
 // ── Tag presets ───────────────────────────────────────────────────────────────
 
@@ -161,7 +163,7 @@ function TaskForm({ initial, onSave, onClose }: {
     description: initial?.description ?? '',
     issue_type:  initial?.issue_type  ?? 'task' as 'task' | 'subtask',
     priority:    initial?.priority    ?? 'medium' as Priority,
-    status:      initial?.status      ?? 'todo'   as Status,
+    status:      initial?.status      ?? 'unassigned' as Status,
     assignee_id: initial?.assignee_id ?? '',
     sprint_id:   initial?.sprint_id   ?? '',
     tags:        initial?.tags        ?? [] as string[],
@@ -256,7 +258,7 @@ function TaskForm({ initial, onSave, onClose }: {
           <label className="block text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: colors.textSubtle }}>Status</label>
           <select className="input" value={form.status}
             onChange={e => setForm(f => ({ ...f, status: e.target.value as Status }))}>
-            {STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
+            {BOARD_COLUMNS.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
           </select>
         </div>
       </div>
@@ -281,13 +283,49 @@ function TaskForm({ initial, onSave, onClose }: {
       </div>
 
       <div className="flex gap-2 pt-2" style={{ borderTop: `1px solid ${colors.border}` }}>
-        <button type="submit" disabled={saving || !form.title.trim()} className="btn-primary">
+        <button type="submit" disabled={saving || !form.title.trim()} className="btn-primary"
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {saving && <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />}
           {saving ? 'Saving…' : initial?.id ? 'Update' : `Create ${form.issue_type}`}
         </button>
         <button type="button" onClick={onClose} className="btn-subtle">Cancel</button>
       </div>
     </form>
   )
+}
+
+// ── Activity history ──────────────────────────────────────────────────────────
+
+type ActivityEntry = {
+  id:         string
+  action:     string
+  from?:      string | null
+  to?:        string | null
+  created_at: string
+  user?:      { id: string; name: string }
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  status_changed:   'changed status',
+  priority_changed: 'changed priority',
+  assigned:         'changed assignee',
+  created:          'created this task',
+  commented:        'commented',
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  todo:        'To Do',
+  in_progress: 'In Progress',
+  review:      'Review',
+  done:        'Done',
+}
+
+function formatActivityValue(action: string, val?: string | null, profiles: { id: string; name: string }[] = []) {
+  if (!val) return '—'
+  if (action === 'status_changed')   return STATUS_LABELS[val] ?? val
+  if (action === 'priority_changed') return val.charAt(0).toUpperCase() + val.slice(1)
+  if (action === 'assigned')         return profiles.find(p => p.id === val)?.name ?? val
+  return val
 }
 
 // ── Detail panel ──────────────────────────────────────────────────────────────
@@ -311,8 +349,15 @@ function DetailPanel({ task, subtasks, onClose, onSave, onDelete, onAddSubtask, 
     sprint_id:   task.sprint_id   ?? '',
     tags:        task.tags        ?? [] as string[],
   })
-  const [saving, setSaving] = useState(false)
-  const [editTitle, setEditTitle] = useState(false)
+  const [saving,      setSaving]      = useState(false)
+  const [editTitle,   setEditTitle]   = useState(false)
+  const [history,     setHistory]     = useState<ActivityEntry[]>([])
+  const [historyOpen, setHistoryOpen] = useState(true)
+
+  const fetchHistory = useCallback(async () => {
+    const { data } = await bugService.getActivity(task.id)
+    if (data) setHistory(data as any)
+  }, [task.id])
 
   useEffect(() => {
     setForm({
@@ -324,6 +369,7 @@ function DetailPanel({ task, subtasks, onClose, onSave, onDelete, onAddSubtask, 
       sprint_id:   task.sprint_id   ?? '',
       tags:        task.tags        ?? [],
     })
+    fetchHistory()
   }, [task.id])
 
   async function save(patch: Partial<typeof form>) {
@@ -332,6 +378,7 @@ function DetailPanel({ task, subtasks, onClose, onSave, onDelete, onAddSubtask, 
     setSaving(true)
     await onSave({ ...next, assignee_id: next.assignee_id || undefined, sprint_id: next.sprint_id || undefined })
     setSaving(false)
+    setTimeout(fetchHistory, 600)
   }
 
   function toggleTag(tag: string) {
@@ -415,7 +462,7 @@ function DetailPanel({ task, subtasks, onClose, onSave, onDelete, onAddSubtask, 
             { label: 'STATUS',   node: (
               <select className="input py-1 text-xs" value={form.status}
                 onChange={e => save({ status: e.target.value as Status })}>
-                {STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
+                {BOARD_COLUMNS.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
               </select>
             )},
             { label: 'PRIORITY', node: (
@@ -426,7 +473,13 @@ function DetailPanel({ task, subtasks, onClose, onSave, onDelete, onAddSubtask, 
             )},
             { label: 'ASSIGNEE', node: (
               <select className="input py-1 text-xs" value={form.assignee_id}
-                onChange={e => save({ assignee_id: e.target.value })}>
+                onChange={e => {
+                  const newId = e.target.value
+                  const patch: Record<string, string> = { assignee_id: newId }
+                  if (newId && form.status === 'unassigned') patch.status = 'assigned'
+                  if (!newId && form.status === 'assigned')  patch.status = 'unassigned'
+                  save(patch as any)
+                }}>
                 <option value="">Unassigned</option>
                 {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
@@ -510,6 +563,77 @@ function DetailPanel({ task, subtasks, onClose, onSave, onDelete, onAddSubtask, 
         <div className="text-[11px]" style={{ color: colors.textLight }}>
           Created {formatDistanceToNow(new Date(task.created_at), { addSuffix: true })}
         </div>
+
+        {/* History */}
+        <div style={{ borderTop: `1px solid ${colors.border}` }}>
+          <button
+            onClick={() => setHistoryOpen(o => !o)}
+            className="flex items-center justify-between w-full pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide"
+            style={{ color: colors.textSubtle }}>
+            History
+            {historyOpen
+              ? <ChevronDown className="w-3.5 h-3.5" />
+              : <ChevronUp className="w-3.5 h-3.5" />}
+          </button>
+
+          {historyOpen && (
+            <div className="space-y-3 pt-1 pb-2">
+              {/* Created entry */}
+              <div className="flex items-start gap-2">
+                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0 mt-0.5"
+                  style={{ background: colors.green }}>
+                  ✦
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px]" style={{ color: colors.textSecondary }}>Task created</p>
+                  <p className="text-[10px]" style={{ color: colors.textFaint }}>
+                    {formatDistanceToNow(new Date(task.created_at), { addSuffix: true })}
+                  </p>
+                </div>
+              </div>
+
+              {history.length === 0 && (
+                <p className="text-[11px] pl-7" style={{ color: colors.textPlaceholder }}>No changes yet</p>
+              )}
+
+              {history.map(entry => {
+                const userName = entry.user?.name ?? 'Someone'
+                const label    = ACTION_LABELS[entry.action] ?? entry.action
+                const fromVal  = formatActivityValue(entry.action, entry.from, profiles)
+                const toVal    = formatActivityValue(entry.action, entry.to,   profiles)
+                return (
+                  <div key={entry.id} className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0 mt-0.5"
+                      style={{ background: colors.blue }}>
+                      {userName[0]?.toUpperCase()}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] leading-snug" style={{ color: colors.textSecondary }}>
+                        <span className="font-semibold" style={{ color: colors.textPrimary }}>{userName}</span>
+                        {' '}{label}
+                        {entry.from && entry.to && (
+                          <> from{' '}
+                            <span className="font-medium" style={{ color: colors.textMuted }}>{fromVal}</span>
+                            {' '}→{' '}
+                            <span className="font-semibold" style={{ color: colors.blue }}>{toVal}</span>
+                          </>
+                        )}
+                        {!entry.from && entry.to && (
+                          <> to{' '}
+                            <span className="font-semibold" style={{ color: colors.blue }}>{toVal}</span>
+                          </>
+                        )}
+                      </p>
+                      <p className="text-[10px]" style={{ color: colors.textFaint }}>
+                        {formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -518,7 +642,7 @@ function DetailPanel({ task, subtasks, onClose, onSave, onDelete, onAddSubtask, 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function TaskBoard() {
-  const { bugs, setBugs, addBug, updateBug, deleteBug, user, project, sprints, setSprints } = useStore()
+  const { bugs, setBugs, addBug, updateBug, deleteBug, user, project, profiles, sprints, setSprints, addToast, startLoading, stopLoading } = useStore()
 
   const [showCreate,    setShowCreate]    = useState(false)
   const [defaultStatus, setDefaultStatus] = useState<Status>('todo')
@@ -580,37 +704,77 @@ export default function TaskBoard() {
 
   async function handleCreate(data: Partial<Issue>) {
     if (!user || !project) return
-    const { data: created } = await bugService.create({
-      ...data, issue_type: data.issue_type ?? 'task', created_by: user.id, project_id: project.id, tags: data.tags ?? [],
+    startLoading()
+    const { data: created, error } = await bugService.create({
+      ...data, issue_type: data.issue_type ?? 'task', status: data.status ?? 'unassigned', created_by: user.id, project_id: project.id, tags: data.tags ?? [],
     })
-    if (created) addBug(created as any)
+    stopLoading()
+    if (error) { addToast('error', 'Failed to create task. Please try again.'); return }
+    if (created) { addBug(created as any); addToast('success', 'Task created successfully.') }
   }
 
   async function handleUpdate(data: Partial<Issue>) {
-    if (!selectedId) return
-    await bugService.update(selectedId, data)
-    updateBug(selectedId, data)
+    const id   = selectedId
+    const task = selectedTask
+    if (!id || !user || !task) return
+
+    const patch: Partial<Issue> = { ...data }
+    if ('assignee_id' in data) {
+      patch.assignee = data.assignee_id
+        ? (profiles.find(p => p.id === data.assignee_id) as any)
+        : undefined
+    }
+
+    startLoading()
+    const { error } = await bugService.update(id, patch)
+    stopLoading()
+    if (error) {
+      addToast('error', (error as any)?.status === 404 ? 'Task not found.' : 'Failed to save changes. Please try again.')
+      return
+    }
+    updateBug(id, patch)
+    addToast('success', 'Task updated successfully.')
+
+    if ('status' in patch && patch.status !== task.status)
+      bugService.logActivity(id, user.id, 'status_changed', task.status, patch.status)
+    if ('assignee_id' in patch && patch.assignee_id !== task.assignee_id)
+      bugService.logActivity(id, user.id, 'assigned', task.assignee_id ?? null, patch.assignee_id ?? null)
+    if ('priority' in patch && patch.priority !== task.priority)
+      bugService.logActivity(id, user.id, 'priority_changed', task.priority, patch.priority)
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this task?')) return
-    await bugService.delete(id)
+    startLoading()
+    const { error } = await bugService.delete(id)
+    stopLoading()
+    if (error) {
+      addToast('error', (error as any)?.status === 404 ? 'Task not found.' : 'Failed to delete task.')
+      return
+    }
     deleteBug(id)
     if (selectedId === id) setSelectedId(null)
+    addToast('success', 'Task deleted.')
   }
 
   async function handleToggleSubtask(id: string, done: boolean) {
     const status: Status = done ? 'done' : 'in_progress'
-    await bugService.update(id, { status })
+    startLoading()
+    const { error } = await bugService.update(id, { status })
+    stopLoading()
+    if (error) { addToast('error', 'Failed to update subtask.'); return }
     updateBug(id, { status })
   }
 
   async function handleAddSubtask(data: Partial<Issue>) {
     if (!user || !project) return
-    const { data: created } = await bugService.create({
+    startLoading()
+    const { data: created, error } = await bugService.create({
       ...data, issue_type: 'subtask', created_by: user.id, project_id: project.id, tags: [],
     })
-    if (created) addBug(created as any)
+    stopLoading()
+    if (error) { addToast('error', 'Failed to create subtask.'); return }
+    if (created) { addBug(created as any); addToast('success', 'Subtask added.') }
   }
 
   // Drag handlers
@@ -620,7 +784,7 @@ export default function TaskBoard() {
     if (!over) { setOverColumnId(null); return }
     const overId = over.id as string
     setOverColumnId(
-      (STATUSES as string[]).includes(overId)
+      (BOARD_COLUMNS as string[]).includes(overId)
         ? overId as Status
         : (tasks.find(t => t.id === overId)?.status ?? null)
     )
@@ -632,12 +796,25 @@ export default function TaskBoard() {
     const task = tasks.find(t => t.id === active.id)
     if (!task) return
     const overId       = over.id as string
-    const isColumn     = (STATUSES as string[]).includes(overId)
+    const isColumn     = (BOARD_COLUMNS as string[]).includes(overId)
     const targetStatus = isColumn ? overId as Status : (tasks.find(t => t.id === overId)?.status ?? null)
     if (!targetStatus) return
     if (task.status !== targetStatus) {
-      bugService.update(task.id, { status: targetStatus })
-      updateBug(task.id, { status: targetStatus })
+      const movingToUnassigned = targetStatus === 'unassigned'
+      const patch: Partial<Issue> = movingToUnassigned
+        ? { status: targetStatus, assignee_id: undefined, assignee: undefined }
+        : { status: targetStatus, assignee_id: user?.id, assignee: profiles.find(p => p.id === user?.id) as any }
+      bugService.update(task.id, patch).then(({ error }) => {
+        if (error) addToast('error', 'Failed to update status.')
+      })
+      updateBug(task.id, patch)
+      if (user) {
+        bugService.logActivity(task.id, user.id, 'status_changed', task.status, targetStatus)
+        if (movingToUnassigned && task.assignee_id)
+          bugService.logActivity(task.id, user.id, 'assigned', task.assignee_id, null)
+        else if (!movingToUnassigned && task.assignee_id !== user.id)
+          bugService.logActivity(task.id, user.id, 'assigned', task.assignee_id ?? null, user.id)
+      }
       return
     }
     if (!isColumn) {
@@ -730,7 +907,7 @@ export default function TaskBoard() {
             onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
 
             <div className="flex gap-4 h-full pb-2" style={{ minWidth: 'max-content' }}>
-              {STATUSES.map(status => {
+              {BOARD_COLUMNS.map(status => {
                 const cfg     = STATUS_CONFIG[status]
                 const items   = filtered
                   .filter(t => t.status === status)

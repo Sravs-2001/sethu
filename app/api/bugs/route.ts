@@ -72,9 +72,18 @@ export async function PATCH(request: Request) {
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const body = await request.json()
-  const { error } = await supabase.from('bugs').update(body).eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Strip joined/virtual fields that are not real DB columns
+  const { assignee, reporter, project, ...dbFields } = body
+  const { data: updated, error } = await supabase
+    .from('bugs').update(dbFields).eq('id', id).select('id')
+
+  if (error) {
+    console.error('[api/bugs PATCH]', JSON.stringify(error))
+    return NextResponse.json({ error: error.message, details: error.details, code: error.code }, { status: 500 })
+  }
+  if (!updated || updated.length === 0)
+    return NextResponse.json({ error: 'Issue not found.' }, { status: 404 })
   return NextResponse.json({ success: true })
 }
 
@@ -87,7 +96,10 @@ export async function DELETE(request: Request) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  const { error } = await supabase.from('bugs').delete().eq('id', id)
+  const { data: deleted, error } = await supabase
+    .from('bugs').delete().eq('id', id).select('id')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!deleted || deleted.length === 0)
+    return NextResponse.json({ error: 'Issue not found.' }, { status: 404 })
   return NextResponse.json({ success: true })
 }

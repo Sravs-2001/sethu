@@ -9,11 +9,13 @@ import HomeSidebar from './HomeSidebar'
 import JiraLogo from '@/components/ui/JiraLogo'
 import NotificationBell from '@/components/Notifications/NotificationBell'
 import ThemeToggle from '@/components/ui/ThemeToggle'
+import Toaster from '@/components/ui/Toast'
+import LoadingBar from '@/components/ui/LoadingBar'
 import type { Project } from '@/types'
 import {
   HelpCircle, ChevronDown, LogOut, Shield,
   Plus, X, Settings, Check,
-  ChevronRight,
+  ChevronRight, Users, Circle,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -21,10 +23,10 @@ import clsx from 'clsx'
 function GlobalCreateModal({ onClose }: { onClose: () => void }) {
   const router = useRouter()
   const options = [
-    { label: 'Issue',   icon: '🐛', desc: 'Bug, task, story or epic', href: '/dashboard/board'    },
-    { label: 'Feature', icon: '✨', desc: 'New feature request',      href: '/dashboard/features' },
-    { label: 'Sprint',  icon: '🚀', desc: 'Sprint planning board',    href: '/dashboard/backlog'  },
-    { label: 'Project', icon: '📁', desc: 'New software project',     href: '/dashboard/projects' },
+    { label: 'Issue', icon: '🐛', desc: 'Bug, task, story or epic', href: '/dashboard/board' },
+    { label: 'Feature', icon: '✨', desc: 'New feature request', href: '/dashboard/features' },
+    { label: 'Sprint', icon: '🚀', desc: 'Sprint planning board', href: '/dashboard/backlog' },
+    { label: 'Project', icon: '📁', desc: 'New software project', href: '/dashboard/projects' },
   ]
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-28"
@@ -77,7 +79,7 @@ function ProjectsDropdown({ onClose }: { onClose: () => void }) {
           className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
             style={{ backgroundColor: p.avatar_color }}>
-            {p.key.slice(0,2)}
+            {p.key.slice(0, 2)}
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-gray-900 truncate">{p.name}</div>
@@ -115,29 +117,41 @@ function GlobalTopNav({
   onGoToAdmin?: () => void
 }) {
   const { user, project } = useStore()
-  const router   = useRouter()
+  const router = useRouter()
   const pathname = usePathname()
 
-  const [userMenuOpen,     setUserMenuOpen]     = useState(false)
-  const [createOpen,       setCreateOpen]       = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   const [projectsDropOpen, setProjectsDropOpen] = useState(false)
+  const [membersDropOpen, setMembersDropOpen] = useState(false)
+  const [members, setMembers] = useState<any[]>([])
 
-  const menuRef     = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const projDropRef = useRef<HTMLDivElement>(null)
+  const membersRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setUserMenuOpen(false)
       if (projDropRef.current && !projDropRef.current.contains(e.target as Node)) setProjectsDropOpen(false)
+      if (membersRef.current && !membersRef.current.contains(e.target as Node)) setMembersDropOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  useEffect(() => {
+    if (project?.id) {
+      projectService.getMembers(project.id).then(({ data }) => {
+        if (data) setMembers(data)
+      })
+    }
+  }, [project?.id])
+
   // Keyboard shortcut: 'c' to create
   useEffect(() => {
     function handler(e: KeyboardEvent) {
-      if (e.key === 'c' && !e.metaKey && !e.ctrlKey && !['INPUT','TEXTAREA'].includes((e.target as Element)?.tagName) && !document.querySelector('[data-modal]'))
+      if (e.key === 'c' && !e.metaKey && !e.ctrlKey && !['INPUT', 'TEXTAREA'].includes((e.target as Element)?.tagName) && !document.querySelector('[data-modal]'))
         setCreateOpen(true)
     }
     document.addEventListener('keydown', handler)
@@ -145,19 +159,19 @@ function GlobalTopNav({
   }, [])
 
   const navItems = [
-    { label: 'Your work',  href: '/dashboard/board'    },
-    { label: 'Projects',   href: null, hasDropdown: true },
-    { label: 'Dashboards', href: '/dashboard/reports'  },
+    { label: 'Your work', href: '/dashboard/board' },
+    { label: 'Projects', href: null, hasDropdown: true },
+    { label: 'Dashboards', href: '/dashboard/reports' },
   ]
 
   return (
     <>
-      <header className="flex-shrink-0 flex items-center px-3 h-12 z-40 gap-1 bg-gray-900 border-b border-white/5">
+      <header className="flex-shrink-0 flex items-center px-3 h-12 z-40 gap-1 bg-white border-b border-gray-200">
 
         {/* Logo */}
         <div className="flex items-center gap-1.5 px-2 mr-1 flex-shrink-0 select-none">
           <JiraLogo size={26} />
-          <span className="sethu-brand text-white text-base hidden sm:block">sethu</span>
+          <span className="sethu-brand text-gray-900 text-base hidden sm:block">sethu</span>
         </div>
 
         {/* Nav links */}
@@ -172,8 +186,8 @@ function GlobalTopNav({
                     className={clsx(
                       'flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
                       projectsDropOpen
-                        ? 'bg-white/10 text-white'
-                        : 'text-white/60 hover:bg-white/8 hover:text-white'
+                        ? 'bg-gray-100 text-gray-900'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                     )}>
                     {item.label}
                     <ChevronDown className={clsx('w-3.5 h-3.5 transition-transform', projectsDropOpen && 'rotate-180')} />
@@ -190,8 +204,8 @@ function GlobalTopNav({
                 className={clsx(
                   'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-white/10 text-white'
-                    : 'text-white/60 hover:bg-white/8 hover:text-white'
+                    ? 'bg-gray-100 text-gray-900'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 )}>
                 {item.label}
               </button>
@@ -204,30 +218,98 @@ function GlobalTopNav({
         {/* Right-side actions */}
         <div className="flex items-center gap-1">
           {/* Create button */}
-          <button
+          {/* <button
             onClick={() => setCreateOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold mr-1 bg-white text-gray-900 hover:bg-gray-100 transition-colors">
             <Plus className="w-3.5 h-3.5" />
             <span>Create</span>
-          </button>
+          </button> */}
 
           {/* Theme toggle */}
           <ThemeToggle compact />
 
           {/* Help */}
-          <button className="p-1.5 rounded text-[rgba(255,255,255,0.6)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white transition-colors">
+          {/* <button className="p-1.5 rounded text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
             <HelpCircle className="w-4 h-4" />
-          </button>
+          </button> */}
 
           {/* Notifications */}
           <NotificationBell />
+
+          {/* Team members dropdown */}
+          <div className="relative" ref={membersRef}>
+            <button
+              onClick={() => setMembersDropOpen(o => !o)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+              <div className="flex -space-x-2">
+                {members.slice(0, 5).map((m: any, i: number) => (
+                  <div key={m.id} className="relative">
+                    {m.profile?.avatar_url ? (
+                      <img src={m.profile.avatar_url} alt={m.profile?.name} className="w-7 h-7 rounded-full object-cover border-2 border-white" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-white"
+                        style={{ background: '#0052CC' }}>
+                        {m.profile?.name?.[0]?.toUpperCase() ?? '?'}
+                      </div>
+                    )}
+                    {m.user_id === user?.id && (
+                      <Circle className="w-2.5 h-2.5 text-green-500 fill-green-500 absolute -bottom-0.5 -right-0.5" />
+                    )}
+                  </div>
+                ))}
+                {members.length > 5 && (
+                  <div className="w-7 h-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs font-medium text-gray-600">
+                    +{members.length - 5}
+                  </div>
+                )}
+              </div>
+              <ChevronDown className={clsx('w-3.5 h-3.5 text-gray-500 transition-transform', membersDropOpen && 'rotate-180')} />
+            </button>
+
+            {membersDropOpen && (
+              <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-xl overflow-hidden z-50 border border-gray-100 shadow-xl">
+                <div className="px-3 py-2.5 border-b border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Team</span>
+                    <span className="text-xs font-bold text-gray-900">{members.length} members</span>
+                  </div>
+                </div>
+                <div className="max-h-64 overflow-y-auto py-1">
+                  {members.map((m: any) => (
+                    <div key={m.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 transition-colors">
+                      <div className="relative flex-shrink-0">
+                        {m.profile?.avatar_url ? (
+                          <img src={m.profile.avatar_url} alt={m.profile?.name} className="w-8 h-8 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                            style={{ background: '#0052CC' }}>
+                            {m.profile?.name?.[0]?.toUpperCase() ?? '?'}
+                          </div>
+                        )}
+                        {m.user_id === user?.id && (
+                          <Circle className="w-3 h-3 text-green-500 fill-green-500 absolute -bottom-0.5 -right-0.5" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">{m.profile?.name ?? '—'}</div>
+                        <div className="text-xs text-gray-500 capitalize">{m.role || 'member'}</div>
+                      </div>
+                      {m.user_id === user?.id && (
+                        <span className="text-[10px] font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">You</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* User menu */}
           <div className="relative ml-1" ref={menuRef}>
             <button onClick={() => setUserMenuOpen(o => !o)}
               className="flex items-center gap-1.5 pl-1 pr-2 py-1 rounded transition-colors"
-              style={userMenuOpen ? { background: 'rgba(255,255,255,0.12)' } : {}}
-              onMouseEnter={e => !userMenuOpen && ((e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)')}
+              style={userMenuOpen ? { background: '#f3f4f6' } : {}}
+              onMouseEnter={e => !userMenuOpen && ((e.currentTarget as HTMLElement).style.background = '#f9fafb')}
               onMouseLeave={e => !userMenuOpen && ((e.currentTarget as HTMLElement).style.background = '')}>
               {user?.avatar_url ? (
                 <img src={user.avatar_url} alt={user.name} className="w-7 h-7 rounded-full object-cover" />
@@ -320,14 +402,16 @@ export default function AppLayout({
     })
   }, [project?.id])
 
-  const isChatView  = pathname === '/dashboard/chat'
+  const isChatView = pathname === '/dashboard/chat'
 
   // Home pages: no project context needed
-  const HOME_PATHS  = ['/dashboard/projects', '/dashboard/my-tasks', '/dashboard/summary']
-  const isHomePage  = !project || HOME_PATHS.some(p => pathname.startsWith(p))
+  const HOME_PATHS = ['/dashboard/projects', '/dashboard/my-tasks', '/dashboard/summary']
+  const isHomePage = !project || HOME_PATHS.some(p => pathname.startsWith(p))
 
   return (
     <div className="h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
+      <LoadingBar />
+      <Toaster />
       <GlobalTopNav onSignOut={onSignOut} onGoToAdmin={onGoToAdmin} />
       <div className="flex flex-1 min-h-0">
 

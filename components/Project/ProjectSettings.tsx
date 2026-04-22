@@ -13,7 +13,7 @@ const AVATAR_COLORS = [
 ]
 
 export default function ProjectSettings() {
-  const { project, setProject, projects, setProjects, user, projectMembers } = useStore()
+  const { project, setProject, projects, setProjects, user, projectMembers, addToast, startLoading, stopLoading } = useStore()
   const router = useRouter()
 
   const [name,        setName]        = useState(project?.name ?? '')
@@ -49,23 +49,30 @@ export default function ProjectSettings() {
     e.preventDefault()
     if (!name.trim()) return
     setSaving(true); setError(''); setSaved(false)
+    startLoading()
 
     const { data, error: err } = await projectService.update(proj.id, {
       name: name.trim(), description: description.trim() ?? undefined, avatar_color: color,
     })
+    stopLoading()
 
-    if (err) { setError(err.message); setSaving(false); return }
+    if (err) { setError(err.message); setSaving(false); addToast('error', err.message || 'Failed to save project.'); return }
     setProject(data)
     setProjects(projects.map(p => p.id === data.id ? data : p))
     setSaving(false); setSaved(true)
+    addToast('success', 'Project settings saved.')
     setTimeout(() => setSaved(false), 2500)
   }
 
   async function handleDelete() {
     if (confirmName !== proj.name) return
     setDeleting(true)
-    await projectService.delete(proj.id)
+    startLoading()
+    const { error } = await projectService.delete(proj.id)
+    stopLoading()
+    if (error) { setDeleting(false); addToast('error', 'Failed to delete project.'); return }
 
+    addToast('info', `Project "${proj.name}" deleted.`)
     const remaining = projects.filter(p => p.id !== proj.id)
     setProjects(remaining)
     if (remaining.length > 0) {

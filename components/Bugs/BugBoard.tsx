@@ -28,6 +28,9 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+// Board columns for Bug/Task boards (subset of all statuses)
+const BOARD_COLUMNS: Status[] = ['unassigned', 'assigned', 'todo', 'in_progress', 'done']
+
 // Per-type form config
 const TYPE_FORM_CONFIG: Record<IssueType, {
   summaryLabel:      string
@@ -214,7 +217,7 @@ function IssueForm({ initial, forcedType, onSave, onClose }: {
     description: initial?.description ?? '',
     issue_type:  forcedType ?? initial?.issue_type ?? 'task' as IssueType,
     priority:    initial?.priority    ?? 'medium' as Priority,
-    status:      initial?.status      ?? 'todo'   as Status,
+    status:      initial?.status      ?? 'unassigned' as Status,
     assignee_id: initial?.assignee_id ?? '',
     sprint_id:   initial?.sprint_id   ?? '',
   })
@@ -295,7 +298,7 @@ function IssueForm({ initial, forcedType, onSave, onClose }: {
           <FieldLabel>Status</FieldLabel>
           <select className="input" value={form.status}
             onChange={e => setForm({ ...form, status: e.target.value as Status })}>
-            {STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
+            {BOARD_COLUMNS.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
           </select>
         </div>
       </div>
@@ -324,7 +327,9 @@ function IssueForm({ initial, forcedType, onSave, onClose }: {
       )}
 
       <div className="flex gap-2 pt-2" style={{ borderTop: `1px solid ${colors.border}` }}>
-        <button type="submit" className="btn-primary" disabled={saving || !form.title.trim()}>
+        <button type="submit" className="btn-primary" disabled={saving || !form.title.trim()}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {saving && <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />}
           {saving ? 'Saving…' : initial?.id ? 'Update' : 'Create'}
         </button>
         <button type="button" onClick={onClose} className="btn-subtle">Cancel</button>
@@ -359,10 +364,11 @@ const STATUS_LABELS: Record<string, string> = {
   done:        'Done',
 }
 
-function formatActivityValue(action: string, val?: string | null) {
+function formatActivityValue(action: string, val?: string | null, profiles: { id: string; name: string }[] = []) {
   if (!val) return '—'
   if (action === 'status_changed')   return STATUS_LABELS[val] ?? val
   if (action === 'priority_changed') return val.charAt(0).toUpperCase() + val.slice(1)
+  if (action === 'assigned')         return profiles.find(p => p.id === val)?.name ?? val
   return val
 }
 
@@ -480,7 +486,7 @@ function DetailPanel({ bug, issueKey, onClose, onSave, onDelete }: {
             <span className="w-24 text-[11px] font-semibold flex-shrink-0" style={{ color: colors.textSubtle }}>STATUS</span>
             <select className="input py-1 text-xs" value={form.status}
               onChange={e => save({ status: e.target.value as Status })}>
-              {STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
+              {BOARD_COLUMNS.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
             </select>
           </div>
           <div className="flex items-center gap-3">
@@ -493,7 +499,13 @@ function DetailPanel({ bug, issueKey, onClose, onSave, onDelete }: {
           <div className="flex items-center gap-3">
             <span className="w-24 text-[11px] font-semibold flex-shrink-0" style={{ color: colors.textSubtle }}>ASSIGNEE</span>
             <select className="input py-1 text-xs" value={form.assignee_id}
-              onChange={e => save({ assignee_id: e.target.value })}>
+              onChange={e => {
+                const newId = e.target.value
+                const patch: Record<string, string> = { assignee_id: newId }
+                if (newId && form.status === 'unassigned') patch.status = 'assigned'
+                if (!newId && form.status === 'assigned')  patch.status = 'unassigned'
+                save(patch as any)
+              }}>
               <option value="">Unassigned</option>
               {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
@@ -560,8 +572,8 @@ function DetailPanel({ bug, issueKey, onClose, onSave, onDelete }: {
                 const userName = entry.user?.name ?? 'Someone'
                 const initial  = userName[0]?.toUpperCase()
                 const label    = ACTION_LABELS[entry.action] ?? entry.action
-                const fromVal  = formatActivityValue(entry.action, entry.from)
-                const toVal    = formatActivityValue(entry.action, entry.to)
+                const fromVal  = formatActivityValue(entry.action, entry.from, profiles)
+                const toVal    = formatActivityValue(entry.action, entry.to,   profiles)
 
                 return (
                   <div key={entry.id} className="flex items-start gap-2">
@@ -608,7 +620,7 @@ function DetailPanel({ bug, issueKey, onClose, onSave, onDelete }: {
 type SortField = 'title' | 'priority' | 'status' | 'created_at'
 
 export default function BugBoard() {
-  const { bugs, setBugs, addBug, updateBug, deleteBug, user, project, profiles, sprints, setSprints } = useStore()
+  const { bugs, setBugs, addBug, updateBug, deleteBug, user, project, profiles, sprints, setSprints, addToast, startLoading, stopLoading } = useStore()
 
   const [showCreate,     setShowCreate]     = useState(false)
   const [defaultStatus,  setDefaultStatus]  = useState<Status>('todo')
@@ -667,10 +679,16 @@ export default function BugBoard() {
 
   async function handleCreate(data: Partial<BugType>) {
     if (!user || !project) return
-    const { data: bug } = await bugService.create({
-      ...data, issue_type: data.issue_type ?? 'task', created_by: user.id, project_id: project.id, tags: [],
+    startLoading()
+    const { data: bug, error } = await bugService.create({
+      ...data, issue_type: data.issue_type ?? 'bug', status: data.status ?? 'unassigned', created_by: user.id, project_id: project.id, tags: [],
     })
-    if (bug) addBug(bug as any)
+    stopLoading()
+    if (error) {
+      addToast('error', (error as any)?.status === 404 ? 'Project not found.' : 'Failed to create issue. Please try again.')
+      return
+    }
+    if (bug) { addBug(bug as any); addToast('success', 'Issue created successfully.') }
   }
 
   async function handleUpdate(data: Partial<BugType>) {
@@ -679,8 +697,6 @@ export default function BugBoard() {
     if (!id || !user || !bug) return
 
     const patch: Partial<BugType> = { ...data }
-
-    // Auto-assign: whoever changes the status becomes the assignee
     if ('status' in data && data.status !== bug.status) {
       patch.assignee_id = user.id
       patch.assignee    = profiles.find(p => p.id === user.id) as any
@@ -691,45 +707,60 @@ export default function BugBoard() {
         : undefined
     }
 
-    await bugService.update(id, patch)
+    startLoading()
+    const { error } = await bugService.update(id, patch)
+    stopLoading()
+    if (error) {
+      addToast('error', (error as any)?.status === 404 ? 'Issue not found.' : 'Failed to save changes. Please try again.')
+      return
+    }
     updateBug(id, patch)
+    addToast('success', 'Issue updated successfully.')
 
-    // Log activity
-    if ('status' in patch && patch.status !== bug.status) {
+    if ('status' in patch && patch.status !== bug.status)
       bugService.logActivity(id, user.id, 'status_changed', bug.status, patch.status)
-    }
-    if ('assignee_id' in patch && patch.assignee_id !== bug.assignee_id) {
+    if ('assignee_id' in patch && patch.assignee_id !== bug.assignee_id)
       bugService.logActivity(id, user.id, 'assigned', bug.assignee_id ?? null, patch.assignee_id ?? null)
-    }
-    if ('priority' in patch && patch.priority !== bug.priority) {
+    if ('priority' in patch && patch.priority !== bug.priority)
       bugService.logActivity(id, user.id, 'priority_changed', bug.priority, patch.priority)
-    }
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this issue?')) return
-    await bugService.delete(id)
+    startLoading()
+    const { error } = await bugService.delete(id)
+    stopLoading()
+    if (error) {
+      addToast('error', (error as any)?.status === 404 ? 'Issue not found.' : 'Failed to delete issue.')
+      return
+    }
     deleteBug(id)
     if (selectedId === id) setSelectedId(null)
+    addToast('success', 'Issue deleted.')
   }
 
   async function handleStatusChange(bugId: string, status: Status) {
     const bug = bugs.find(b => b.id === bugId)
     if (!bug || !user) return
 
-    // Whoever drags the card becomes the assignee
-    const patch: Partial<BugType> = {
-      status,
-      assignee_id: user.id,
-      assignee:    profiles.find(p => p.id === user.id) as any,
-    }
+    const movingToUnassigned = status === 'unassigned'
+    const patch: Partial<BugType> = movingToUnassigned
+      ? { status, assignee_id: undefined, assignee: undefined }
+      : { status, assignee_id: user.id, assignee: profiles.find(p => p.id === user.id) as any }
 
-    await bugService.update(bugId, patch)
+    startLoading()
+    const { error } = await bugService.update(bugId, patch)
+    stopLoading()
+    if (error) {
+      addToast('error', (error as any)?.status === 404 ? 'Issue not found.' : 'Failed to update status.')
+      return
+    }
     updateBug(bugId, patch)
     bugService.logActivity(bugId, user.id, 'status_changed', bug.status, status)
-    if (bug.assignee_id !== user.id) {
+    if (movingToUnassigned && bug.assignee_id)
+      bugService.logActivity(bugId, user.id, 'assigned', bug.assignee_id, null)
+    else if (!movingToUnassigned && bug.assignee_id !== user.id)
       bugService.logActivity(bugId, user.id, 'assigned', bug.assignee_id ?? null, user.id)
-    }
   }
 
   // ── Drag & drop ────────────────────────────────────────────────────────────
@@ -741,7 +772,7 @@ export default function BugBoard() {
   function onDragOver({ over }: DragOverEvent) {
     if (!over) { setOverColumnId(null); return }
     const overId = over.id as string
-    if ((STATUSES as string[]).includes(overId)) {
+    if ((BOARD_COLUMNS as string[]).includes(overId)) {
       setOverColumnId(overId as Status)
     } else {
       const overBug = bugs.find(b => b.id === overId)
@@ -758,7 +789,7 @@ export default function BugBoard() {
     if (!bug) return
 
     const overId       = over.id as string
-    const isColumn     = (STATUSES as string[]).includes(overId)
+    const isColumn     = (BOARD_COLUMNS as string[]).includes(overId)
     const targetStatus = isColumn ? overId as Status : (bugs.find(b => b.id === overId)?.status ?? null)
     if (!targetStatus) return
 
@@ -797,7 +828,7 @@ export default function BugBoard() {
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     let cmp = 0
     if (sortField === 'priority') cmp = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]
-    else if (sortField === 'status') cmp = STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status)
+    else if (sortField === 'status') cmp = BOARD_COLUMNS.indexOf(a.status) - BOARD_COLUMNS.indexOf(b.status)
     else if (sortField === 'title')  cmp = a.title.localeCompare(b.title)
     else cmp = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     return sortAsc ? cmp : -cmp
@@ -884,7 +915,7 @@ export default function BugBoard() {
               onDragEnd={onDragEnd}>
 
               <div className="flex gap-4 h-full pb-2" style={{ minWidth: 'max-content' }}>
-                {STATUSES.map(status => {
+                {BOARD_COLUMNS.map(status => {
                   const cfg      = STATUS_CONFIG[status]
                   const items    = filtered
                     .filter(b => b.status === status)

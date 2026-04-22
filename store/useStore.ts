@@ -6,7 +6,20 @@ import type {
   Project, ProjectMember, View, Notification, Comment, Theme,
 } from '@/types'
 
+export type ToastType = 'success' | 'error' | 'warning' | 'info'
+export interface Toast { id: string; type: ToastType; message: string }
+
 interface AppState {
+  // ── Loading ──────────────────────────────────────────────────────────────────
+  pendingOps:   number
+  startLoading: () => void
+  stopLoading:  () => void
+
+  // ── Toasts ───────────────────────────────────────────────────────────────────
+  toasts:      Toast[]
+  addToast:    (type: ToastType, message: string) => void
+  removeToast: (id: string) => void
+
   // ── Auth ────────────────────────────────────────────────────────────────────
   user:    Profile | null
   setUser: (user: Profile | null) => void
@@ -80,6 +93,20 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set) => ({
+  // ── Loading ───────────────────────────────────────────────────────────────
+  pendingOps:   0,
+  startLoading: () => set((s) => ({ pendingOps: s.pendingOps + 1 })),
+  stopLoading:  () => set((s) => ({ pendingOps: Math.max(0, s.pendingOps - 1) })),
+
+  // ── Toasts ────────────────────────────────────────────────────────────────
+  toasts: [],
+  addToast: (type, message) => {
+    const id = Math.random().toString(36).slice(2)
+    set((s) => ({ toasts: [...s.toasts, { id, type, message }] }))
+    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 4000)
+  },
+  removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+
   // ── Auth ───────────────────────────────────────────────────────────────────
   user:    null,
   setUser: (user) => set({ user }),

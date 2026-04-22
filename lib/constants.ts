@@ -81,9 +81,11 @@ export const STATUS_CONFIG: Record<Status, {
   color:    string
   topColor: string
 }> = {
-  todo:        { label: 'To Do',       dotColor: colors.textLight,  bg: colors.border,      color: colors.textMuted,   topColor: colors.border      },
-  in_progress: { label: 'In Progress', dotColor: colors.blue,       bg: colors.blueLight,   color: colors.blueDark,    topColor: colors.blue        },
-  review:      { label: 'Review',      dotColor: colors.purple,     bg: colors.purpleLight, color: colors.purpleDark,  topColor: colors.purple      },
+  unassigned:  { label: 'Unassigned',  dotColor: colors.textLight,  bg: '#F4F5F7',          color: colors.textMuted,   topColor: '#8993A4'          },
+  assigned:    { label: 'Assigned',    dotColor: colors.amber,      bg: colors.amberLight,  color: colors.amberDark,   topColor: colors.amber       },
+  todo:        { label: 'To Do',       dotColor: colors.blue,       bg: colors.blueLight,   color: colors.blueDark,    topColor: colors.blue        },
+  in_progress: { label: 'In Progress', dotColor: colors.purple,     bg: colors.purpleLight, color: colors.purpleDark,  topColor: colors.purple      },
+  review:      { label: 'Review',      dotColor: colors.teal,       bg: '#E6FCFF',          color: '#006884',          topColor: colors.teal        },
   done:        { label: 'Done',        dotColor: colors.green,      bg: colors.greenLight,  color: colors.greenDark,   topColor: colors.green       },
 }
 

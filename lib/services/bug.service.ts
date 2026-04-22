@@ -42,10 +42,10 @@ export const bugService = {
         body:    JSON.stringify(payload),
       })
       const data = await res.json()
-      if (!res.ok) return { data: null, error: data }
+      if (!res.ok) return { data: null, error: { ...data, status: res.status } }
       return { data, error: null }
     } catch {
-      return { data: null, error: { message: 'Network error' } }
+      return { data: null, error: { message: 'Network error', status: 0 } }
     }
   },
 
@@ -57,10 +57,10 @@ export const bugService = {
         body:    JSON.stringify(payload),
       })
       const data = await res.json()
-      if (!res.ok) return { data: null, error: data }
+      if (!res.ok) return { data: null, error: { ...data, status: res.status } }
       return { data, error: null }
     } catch {
-      return { data: null, error: { message: 'Network error' } }
+      return { data: null, error: { message: 'Network error', status: 0 } }
     }
   },
 
@@ -68,10 +68,10 @@ export const bugService = {
     try {
       const res = await fetch(`/api/bugs?id=${id}`, { method: 'DELETE' })
       const data = await res.json()
-      if (!res.ok) return { data: null, error: data }
+      if (!res.ok) return { data: null, error: { ...data, status: res.status } }
       return { data, error: null }
     } catch {
-      return { data: null, error: { message: 'Network error' } }
+      return { data: null, error: { message: 'Network error', status: 0 } }
     }
   },
 

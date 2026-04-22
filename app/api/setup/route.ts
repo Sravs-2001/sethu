@@ -49,6 +49,42 @@ const SQL = `
     end if;
   end $$;
 
+  -- ── Drop old status check constraint, add new one with all values ─
+  do $$ declare cname text;
+  begin
+    select constraint_name into cname
+    from information_schema.table_constraints
+    where table_schema = 'public' and table_name = 'bugs'
+      and constraint_type = 'CHECK'
+      and constraint_name ilike '%status%';
+    if cname is not null then
+      execute 'alter table public.bugs drop constraint ' || quote_ident(cname);
+    end if;
+  end $$;
+  alter table public.bugs
+    add constraint bugs_status_check
+    check (status in ('unassigned','assigned','todo','in_progress','review','done'));
+
+  -- ── Migrate existing bugs/tasks: set status based on assignee ───
+  update public.bugs
+  set status = 'unassigned'
+  where issue_type in ('bug', 'task')
+    and assignee_id is null
+    and status not in ('in_progress', 'review', 'done');
+
+  update public.bugs
+  set status = 'assigned'
+  where issue_type in ('bug', 'task')
+    and assignee_id is not null
+    and status = 'todo';
+
+  -- ── epic_id column on bugs (links stories to their parent epic) ──
+  do $$ begin
+    if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='bugs' and column_name='epic_id') then
+      alter table public.bugs add column epic_id uuid references public.bugs(id) on delete set null;
+    end if;
+  end $$;
+
   -- ── invite_tokens table ─────────────────────────────────────────
   create table if not exists public.invite_tokens (
     id          uuid      primary key default gen_random_uuid(),

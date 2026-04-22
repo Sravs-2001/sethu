@@ -52,7 +52,7 @@ create table if not exists public.bugs (
   title        text        not null,
   description  text        not null default '',
   priority     text        not null default 'medium' check (priority in ('critical','high','medium','low')),
-  status       text        not null default 'todo'   check (status   in ('todo','in_progress','review','done')),
+  status       text        not null default 'unassigned' check (status in ('unassigned','assigned','todo','in_progress','review','done')),
   issue_type   text        not null default 'bug'    check (issue_type in ('epic','story','task','bug','subtask')),
   assignee_id  uuid        references public.profiles(id) on delete set null,
   sprint_id    uuid,
@@ -77,6 +77,11 @@ alter table public.bugs add column if not exists due_date     text default null;
 alter table public.bugs add column if not exists sort_order   integer not null default 0;
 alter table public.bugs add column if not exists created_at   timestamptz not null default now();
 alter table public.bugs add column if not exists updated_at   timestamptz not null default now();
+-- Ensure status constraint is up-to-date (handles pre-existing tables with old constraints)
+alter table public.bugs drop constraint if exists bugs_status_check;
+alter table public.bugs add constraint bugs_status_check
+  check (status in ('unassigned','assigned','todo','in_progress','review','done'));
+
 create index if not exists bugs_project_id_idx  on public.bugs(project_id);
 create index if not exists bugs_assignee_id_idx on public.bugs(assignee_id);
 create index if not exists bugs_sprint_id_idx   on public.bugs(sprint_id);
@@ -89,7 +94,7 @@ create table if not exists public.features (
   title        text        not null,
   description  text        not null default '',
   priority     text        not null default 'medium' check (priority in ('critical','high','medium','low')),
-  status       text        not null default 'todo'   check (status   in ('todo','in_progress','review','done')),
+  status       text        not null default 'unassigned' check (status in ('unassigned','assigned','todo','in_progress','review','done')),
   assignee_id  uuid        references public.profiles(id) on delete set null,
   sprint_id    uuid,
   created_by   uuid        references public.profiles(id) on delete set null,
