@@ -126,6 +126,7 @@ export type NotificationType =
   | 'invite_received'
   | 'comment_added'
   | 'due_soon'
+  | 'issue_created'
 
 export interface Notification {
   id:         string

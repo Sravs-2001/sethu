@@ -10,15 +10,29 @@ export const commentService = {
   },
 
   async create(taskId: string, userId: string, content: string) {
-    return supabase
-      .from('comments')
-      .insert({ task_id: taskId, user_id: userId, content })
-      .select('*, user:profiles(*)')
-      .single()
+    try {
+      const res = await fetch('/api/comments', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ task_id: taskId, content }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { data: null, error: data }
+      return { data, error: null }
+    } catch {
+      return { data: null, error: { message: 'Network error' } }
+    }
   },
 
   async delete(id: string) {
-    return supabase.from('comments').delete().eq('id', id)
+    try {
+      const res = await fetch(`/api/comments?id=${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) return { data: null, error: data }
+      return { data, error: null }
+    } catch {
+      return { data: null, error: { message: 'Network error' } }
+    }
   },
 
   async getActivity(taskId: string) {

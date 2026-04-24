@@ -199,7 +199,7 @@ create table if not exists public.notifications (
   user_id     uuid        not null references public.profiles(id) on delete cascade,
   type        text        not null check (type in (
     'task_assigned','status_changed','mentioned',
-    'invite_received','comment_added','due_soon'
+    'invite_received','comment_added','due_soon','issue_created'
   )),
   title       text        not null,
   body        text        not null default '',

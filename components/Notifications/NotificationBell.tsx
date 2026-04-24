@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, Check, CheckCheck, X, Loader2, UserPlus } from 'lucide-react'
+import { Bell, Check, CheckCheck, X, Loader2, UserPlus, Plus } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { notificationService } from '@/lib/services'
 import { formatDistanceToNow } from 'date-fns'
@@ -17,6 +17,7 @@ const TYPE_ICON: Record<Notification['type'], string> = {
   invite_received:'📨',
   comment_added:  '💬',
   due_soon:       '📅',
+  issue_created:  '➕',
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
