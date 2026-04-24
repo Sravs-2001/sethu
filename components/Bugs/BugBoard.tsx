@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { bugService, sprintService } from '@/lib/services'
+import { bugService, sprintService, commentService } from '@/lib/services'
 import { useStore } from '@/store/useStore'
 import {
   Plus, Trash2, List, LayoutGrid,
-  User, X, ChevronUp, ChevronDown as ChevronDownIcon,
+  User, X, ChevronUp, ChevronDown as ChevronDownIcon, Search,
 } from 'lucide-react'
 import { PriorityBadge } from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
@@ -15,7 +15,7 @@ import {
   ISSUE_TYPES, ISSUE_TYPE_CONFIG,
   colors,
 } from '@/lib/constants'
-import type { Bug as BugType, Priority, Status, IssueType } from '@/types'
+import type { Bug as BugType, Priority, Status, IssueType, Comment } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 import clsx from 'clsx'
 import {
@@ -379,7 +379,7 @@ function DetailPanel({ bug, issueKey, onClose, onSave, onDelete }: {
   onSave:   (data: Partial<BugType>) => Promise<void>
   onDelete: (id: string) => void
 }) {
-  const { profiles, sprints } = useStore()
+  const { profiles, sprints, user } = useStore()
   const [form, setForm] = useState({
     title:       bug.title,
     description: bug.description ?? '',
@@ -393,6 +393,10 @@ function DetailPanel({ bug, issueKey, onClose, onSave, onDelete }: {
   const [editingTitle, setEditingTitle] = useState(false)
   const [history,      setHistory]      = useState<ActivityEntry[]>([])
   const [historyOpen,  setHistoryOpen]  = useState(true)
+  const [comments,     setComments]     = useState<Comment[]>([])
+  const [commentText,  setCommentText]  = useState('')
+  const [posting,      setPosting]      = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(true)
 
   const cfg = TYPE_FORM_CONFIG[form.issue_type]
 
@@ -412,7 +416,21 @@ function DetailPanel({ bug, issueKey, onClose, onSave, onDelete }: {
       sprint_id:   bug.sprint_id   ?? '',
     })
     fetchHistory()
+    commentService.getByTask(bug.id).then(({ data }) => data && setComments(data as Comment[]))
   }, [bug.id])
+
+  async function postComment() {
+    if (!commentText.trim() || !user) return
+    setPosting(true)
+    const { data } = await commentService.create(bug.id, user.id, commentText.trim())
+    if (data) { setComments(prev => [...prev, data as Comment]); setCommentText('') }
+    setPosting(false)
+  }
+
+  async function deleteCommentItem(id: string) {
+    await commentService.delete(id)
+    setComments(prev => prev.filter(c => c.id !== id))
+  }
 
   async function save(patch: Partial<typeof form>) {
     const next = { ...form, ...patch }
@@ -610,6 +628,78 @@ function DetailPanel({ bug, issueKey, onClose, onSave, onDelete }: {
             </div>
           )}
         </div>
+
+        {/* ── Comments ── */}
+        <div style={{ borderTop: `1px solid ${colors.border}` }}>
+          <button
+            onClick={() => setCommentsOpen(o => !o)}
+            className="flex items-center justify-between w-full pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide"
+            style={{ color: colors.textSubtle }}>
+            Comments ({comments.length})
+            {commentsOpen
+              ? <ChevronDownIcon className="w-3.5 h-3.5" />
+              : <ChevronUp className="w-3.5 h-3.5" style={{ transform: 'rotate(180deg)' }} />}
+          </button>
+
+          {commentsOpen && (
+            <div className="pt-1 pb-2 space-y-3">
+              {comments.length === 0 && (
+                <p className="text-[11px]" style={{ color: colors.textPlaceholder }}>No comments yet</p>
+              )}
+              {comments.map(comment => (
+                <div key={comment.id} className="flex gap-2 group">
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0 mt-0.5"
+                    style={{ background: colors.blue }}>
+                    {comment.user?.name?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold" style={{ color: colors.textPrimary }}>
+                        {comment.user?.name ?? 'Unknown'}
+                      </span>
+                      <span className="text-[10px]" style={{ color: colors.textFaint }}>
+                        {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+                      </span>
+                      {comment.user_id === user?.id && (
+                        <button
+                          onClick={() => deleteCommentItem(comment.id)}
+                          className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="w-3 h-3" style={{ color: colors.red }} />
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] mt-0.5 leading-relaxed whitespace-pre-wrap"
+                      style={{ color: colors.textSecondary }}>
+                      {comment.content}
+                    </p>
+                  </div>
+                </div>
+              ))}
+
+              <div className="flex gap-2 items-end">
+                <textarea
+                  value={commentText}
+                  onChange={e => setCommentText(e.target.value)}
+                  placeholder="Add a comment… (Ctrl+Enter to post)"
+                  className="input text-xs resize-none flex-1"
+                  style={{ minHeight: 56 }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault()
+                      postComment()
+                    }
+                  }}
+                />
+                <button
+                  onClick={postComment}
+                  disabled={!commentText.trim() || posting}
+                  className="btn-primary text-xs py-1 disabled:opacity-50 self-end flex-shrink-0">
+                  {posting ? 'Posting…' : 'Post'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -632,6 +722,7 @@ export default function BugBoard() {
   const [sortAsc,        setSortAsc]        = useState(false)
   const [activeBugId,    setActiveBugId]    = useState<string | null>(null)
   const [overColumnId,   setOverColumnId]   = useState<Status | null>(null)
+  const [search,         setSearch]         = useState('')
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -821,9 +912,11 @@ export default function BugBoard() {
 
   const filtered = useMemo(() => bugs.filter(b =>
     b.issue_type === 'bug' &&
+    (!search         || b.title.toLowerCase().includes(search.toLowerCase()) ||
+                        b.description?.toLowerCase().includes(search.toLowerCase())) &&
     (!filterPriority || b.priority === filterPriority) &&
     (!filterMine     || b.assignee_id === user?.id)
-  ), [bugs, filterPriority, filterMine, user?.id])
+  ), [bugs, search, filterPriority, filterMine, user?.id])
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     let cmp = 0
@@ -863,6 +956,24 @@ export default function BugBoard() {
             {project?.key} · Press <kbd className="px-1 py-0.5 rounded text-[10px] font-mono"
               style={{ background: colors.surfaceLight, border: `1px solid ${colors.border}` }}>C</kbd> to report a bug
           </p>
+        </div>
+
+        {/* Search */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border"
+          style={{ background: colors.white, borderColor: colors.border, minWidth: 160 }}>
+          <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: colors.textFaint }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search bugs…"
+            className="bg-transparent outline-none text-xs flex-1"
+            style={{ color: colors.textPrimary }}
+          />
+          {search && (
+            <button onClick={() => setSearch('')} style={{ color: colors.textFaint }}>
+              <X className="w-3 h-3" />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 ml-auto flex-wrap">

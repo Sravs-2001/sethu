@@ -5,27 +5,55 @@ const SELECT_FEATURE = '*, assignee:profiles(*)'
 
 export const featureService = {
   async getByProject(projectId: string) {
-    return supabase
-      .from('features')
-      .select(SELECT_FEATURE)
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
+    try {
+      const res = await fetch(`/api/features?project_id=${projectId}`)
+      const data = await res.json()
+      if (!res.ok) return { data: null, error: data }
+      return { data, error: null }
+    } catch {
+      return { data: null, error: { message: 'Network error' } }
+    }
   },
 
   async create(payload: Partial<Feature> & { project_id: string; created_by: string }) {
-    return supabase
-      .from('features')
-      .insert(payload)
-      .select(SELECT_FEATURE)
-      .single()
+    try {
+      const res = await fetch('/api/features', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) return { data: null, error: { ...data, status: res.status } }
+      return { data, error: null }
+    } catch {
+      return { data: null, error: { message: 'Network error', status: 0 } }
+    }
   },
 
   async update(id: string, payload: Partial<Feature>) {
-    return supabase.from('features').update(payload).eq('id', id)
+    try {
+      const res = await fetch(`/api/features?id=${id}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) return { data: null, error: { ...data, status: res.status } }
+      return { data, error: null }
+    } catch {
+      return { data: null, error: { message: 'Network error', status: 0 } }
+    }
   },
 
   async delete(id: string) {
-    return supabase.from('features').delete().eq('id', id)
+    try {
+      const res = await fetch(`/api/features?id=${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) return { data: null, error: { ...data, status: res.status } }
+      return { data, error: null }
+    } catch {
+      return { data: null, error: { message: 'Network error', status: 0 } }
+    }
   },
 
   async getStatsByProjects(projectIds: string[]) {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useStore } from '@/store/useStore'
-import { BarChart2, TrendingUp, Bug, Sparkles, Rocket, CheckCircle2, Clock, AlertCircle, Users } from 'lucide-react'
+import { BarChart2, TrendingUp, Bug, Sparkles, Rocket, CheckCircle2, Clock, AlertCircle, Users, Download } from 'lucide-react'
 import clsx from 'clsx'
 import type { Priority, Status } from '@/types'
 
@@ -13,6 +13,8 @@ const PRIORITY_COLOR: Record<Priority, { bar: string; label: string }> = {
 }
 
 const STATUS_COLOR: Record<Status, { bar: string; label: string }> = {
+  unassigned:  { bar: '#DFE1E6', label: 'Unassigned'  },
+  assigned:    { bar: '#B3D4FF', label: 'Assigned'    },
   todo:        { bar: '#97A0AF', label: 'To Do'       },
   in_progress: { bar: '#0052CC', label: 'In Progress' },
   review:      { bar: '#6554C0', label: 'Review'      },
@@ -37,6 +39,43 @@ function BarRow({ label, value, total, color }: { label: string; value: number; 
 export default function Reports() {
   const { bugs, features, sprints, projectMembers, project } = useStore()
 
+  function exportCSV() {
+    const key = project?.key ?? 'PROJ'
+    const rows: string[][] = [
+      ['Type', 'Key', 'Title', 'Priority', 'Status', 'Assignee', 'Created'],
+      ...bugs.map((b, i) => [
+        b.issue_type ?? 'bug',
+        `${key}-${i + 1}`,
+        b.title,
+        b.priority,
+        b.status,
+        (b as any).assignee?.name ?? '',
+        b.created_at.split('T')[0],
+      ]),
+      ...features.map((f, i) => [
+        'feature',
+        `${key}-F${i + 1}`,
+        f.title,
+        f.priority,
+        f.status,
+        (f as any).assignee?.name ?? '',
+        f.created_at.split('T')[0],
+      ]),
+    ]
+    const csv = rows.map(r =>
+      r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')
+    ).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `${project?.name ?? 'project'}-report-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   const allIssues = [...bugs, ...features]
   const total     = allIssues.length
   const openCount = allIssues.filter(i => i.status !== 'done').length
@@ -54,10 +93,10 @@ export default function Reports() {
     p, count: bugs.filter(b => b.priority === p).length,
   }))
 
-  // Status breakdown across all issues
-  const byStatus = (['todo','in_progress','review','done'] as Status[]).map(s => ({
-    s, count: allIssues.filter(i => i.status === s).length,
-  }))
+  // Status breakdown across all issues (skip empty unassigned/assigned rows)
+  const byStatus = (['todo','in_progress','review','done','unassigned','assigned'] as Status[])
+    .map(s => ({ s, count: allIssues.filter(i => i.status === s).length }))
+    .filter(x => x.count > 0)
 
   // Sprint velocity: completed items per sprint
   const completedSprints = sprints.filter(s => s.status === 'completed').slice(0, 5)
@@ -82,12 +121,23 @@ export default function Reports() {
   return (
     <div className="p-6 space-y-6 max-w-5xl">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2">
-          <BarChart2 className="w-5 h-5 text-[#0052CC]" />
-          <h1 className="text-xl font-bold text-[#172B4D]">Reports</h1>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-[#0052CC]" />
+            <h1 className="text-xl font-bold text-[#172B4D]">Reports</h1>
+          </div>
+          <p className="text-sm text-[#5E6C84] mt-0.5">{project?.name} · Analytics overview</p>
         </div>
-        <p className="text-sm text-[#5E6C84] mt-0.5">{project?.name} · Analytics overview</p>
+        <button
+          onClick={exportCSV}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex-shrink-0"
+          style={{ borderColor: '#DFE1E6', color: '#42526E', background: '#fff' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#F4F5F7' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#fff' }}>
+          <Download className="w-3.5 h-3.5" />
+          Export CSV
+        </button>
       </div>
 
       {/* KPI cards */}

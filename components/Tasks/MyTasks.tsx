@@ -454,22 +454,42 @@ export default function MyTasks() {
 
       {/* ── Task detail slide-over ── */}
       {selected && (
-        <TaskDetailOverlay task={selected} onClose={() => setSelected(null)} />
+        <TaskDetailOverlay
+          task={selected}
+          onClose={() => setSelected(null)}
+          onStatusChange={(id, status) => {
+            setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t))
+            setSelected(prev => prev ? { ...prev, status } : null)
+          }}
+        />
       )}
     </div>
   )
 }
 
-// ── Task detail overlay (minimal, since we don't have sprint context here) ────
+// ── Task detail overlay ───────────────────────────────────────────────────────
 
-function TaskDetailOverlay({ task, onClose }: { task: TaskWithProject; onClose: () => void }) {
+function TaskDetailOverlay({
+  task, onClose, onStatusChange,
+}: {
+  task:           TaskWithProject
+  onClose:        () => void
+  onStatusChange: (id: string, status: Status) => void
+}) {
+  const [updating, setUpdating] = useState(false)
+
   useEffect(() => {
     function handler(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const statusEntries = STATUSES.map(s => ({ value: s, label: STATUS_CONFIG[s].label }))
+  async function handleStatusChange(status: Status) {
+    setUpdating(true)
+    await bugService.update(task.id, { status })
+    onStatusChange(task.id, status)
+    setUpdating(false)
+  }
 
   return (
     <div
@@ -509,17 +529,27 @@ function TaskDetailOverlay({ task, onClose }: { task: TaskWithProject; onClose: 
           )}
 
           <div className="grid grid-cols-2 gap-2 text-xs">
+            {/* Status — editable */}
             <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--bg-raised)' }}>
-              <span style={{ color: 'var(--t4)' }}>Status</span>
-              <StatusBadge status={task.status} />
+              <span className="flex-shrink-0" style={{ color: 'var(--t4)' }}>Status</span>
+              <select
+                value={task.status}
+                disabled={updating}
+                onChange={e => handleStatusChange(e.target.value as Status)}
+                className="flex-1 text-xs bg-transparent outline-none cursor-pointer font-semibold"
+                style={{ color: 'var(--t1)' }}>
+                {STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
+              </select>
             </div>
+
             <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--bg-raised)' }}>
               <span style={{ color: 'var(--t4)' }}>Priority</span>
               <PriorityBadge priority={task.priority} />
             </div>
+
             {task.due_date && (
               <div className="flex items-center gap-2 p-2 rounded-lg col-span-2" style={{ background: 'var(--bg-raised)' }}>
-                <Calendar className="w-3 h-3" style={{ color: 'var(--t4)' }} />
+                <Calendar className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--t4)' }} />
                 <span style={{ color: 'var(--t4)' }}>Due</span>
                 <DueBadge date={task.due_date} />
               </div>
@@ -527,7 +557,7 @@ function TaskDetailOverlay({ task, onClose }: { task: TaskWithProject; onClose: 
           </div>
 
           <p className="text-xs text-center" style={{ color: 'var(--t4)' }}>
-            Open the project board to edit this task in full detail.
+            Open the project board to edit in full detail.
           </p>
         </div>
       </div>
